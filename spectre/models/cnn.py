@@ -73,26 +73,11 @@ class SpectreCNN(nn.Module):
             nn.Conv1d(16, 32, kernel_size=9, padding=4), nn.BatchNorm1d(32), nn.ReLU(),
             nn.MaxPool1d(4),
             nn.Conv1d(32, 64, kernel_size=5, padding=2), nn.BatchNorm1d(64), nn.ReLU(),
-<<<<<<< HEAD
-            # 45 evenly divides the conv output length (225, for the default
-            # N_POINTS=3601 grid) -- ONNX's adaptive_avg_pool1d only lowers
-            # cleanly when output size evenly divides input size. Global
-            # pooling (size=1) is always exportable but collapses all
-            # positional information, which badly hurts accuracy here since
-            # distinguishing functional groups is fundamentally about *where*
-            # along the spectrum a feature sits.
-            nn.AdaptiveAvgPool1d(45),
-        )
-        self.head = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(64 * 45, 128), nn.ReLU(), nn.Dropout(0.3),
-=======
             nn.AdaptiveAvgPool1d(32),
         )
         self.head = nn.Sequential(
             nn.Flatten(),
             nn.Linear(64 * 32, 128), nn.ReLU(), nn.Dropout(0.3),
->>>>>>> 85814506aca72b1d0689f58aaf9bcf6ae204c656
             nn.Linear(128, n_labels),
         )
 

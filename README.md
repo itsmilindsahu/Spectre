@@ -7,53 +7,6 @@
 
 ---
 
-<<<<<<< HEAD
-## 0. Quickstart (working code — Phase 1 is implemented)
-
-```bash
-git clone https://github.com/itsmilindsahu/Spectre.git
-cd Spectre
-pip install -r requirements.txt
-
-# Run on the included synthetic example spectra
-python -m spectre.cli examples/sample_spectrum.csv          # carboxylic-acid-like
-python -m spectre.cli examples/sample_spectrum_alcohol.csv  # alcohol-like
-
-# Machine-readable output
-python -m spectre.cli examples/sample_spectrum.csv --json
-
-# Save an annotated plot
-python -m spectre.cli examples/sample_spectrum.csv --plot
-
-# Run the test suite
-pytest tests/ -v
-
-# Phase 3: train the 1D-CNN (bootstrapped on synthetic data -- see
-# spectre/synthetic/generator.py -- since a real labeled dataset (M3) doesn't
-# exist yet) and run inference with it instead of the rule engine
-python scripts/train_cnn.py                                  # ~1-2 min on CPU, saves models_ckpt/cnn_ir.pt
-python -m spectre.cli examples/sample_spectrum.csv --model cnn
-
-# Give it a PNG/JPG of a plotted spectrum instead of raw numbers (works for
-# clean, consistent-source exports with a visible boxed axis frame -- see
-# spectre/ingestion/image_digitizer.py). First time from a given source, pass
-# the real axis range; save a calibration profile to skip that on future runs.
-python -m spectre.cli examples/example_plot_image.png --x-min 4000 --x-max 400 --y-min 0 --y-max 1.05
-python -m spectre.cli examples/example_plot_image.png --calibration calibration/demo_instrument.json
-```
-
-The rule-based classifier (Phase 1 from the roadmap below) is fully
-implemented and tested: ingestion (CSV + minimal JCAMP-DX), baseline
-correction, smoothing, peak detection, and the correlation-table rule
-engine all run end to end. **Phase 3 (1D-CNN) is now also implemented** —
-see `spectre/models/cnn.py`, bootstrapped on synthetic spectra (see below)
-since the real labeled dataset (M3) hasn't been built yet. Phase 2 (classical
-ML) and Phases 4-5 (NMR, multi-modal) are architected for but not yet built.
-
----
-
-=======
->>>>>>> 85814506aca72b1d0689f58aaf9bcf6ae204c656
 ## 1. Abstract
 
 Spectroscopic databases (NIST WebBook, SDBS, Coblentz) let a chemist look up the spectrum of a compound they already know. None of them solve the inverse problem: **given a raw, unlabeled spectrum, automatically determine what functional groups — and eventually what structure — produced it.**
@@ -144,48 +97,6 @@ Spectre aims to close this gap with a transparent, reproducible, and freely avai
 spectre/
 ├── README.md
 ├── LICENSE
-<<<<<<< HEAD
-├── setup.py
-├── requirements.txt
-├── .gitignore
-├── docs/
-│   ├── correlation-table.md        # IR peak-region reference (chemistry track)
-│   └── nmr-extension.md            # Phase 4 design notes
-├── data/
-│   ├── raw/                        # Downloaded spectra (gitignored, empty by default)
-│   ├── labeled/                    # Auto-labeled via SMARTS (gitignored, empty by default)
-│   └── README.md                   # Data sourcing + licensing notes
-├── examples/
-│   ├── sample_spectrum.csv         # synthetic carboxylic-acid-like spectrum
-│   └── sample_spectrum_alcohol.csv # synthetic alcohol-like spectrum
-├── spectre/
-│   ├── ingestion/
-│   │   ├── parsers.py               # CSV + minimal JCAMP-DX parser  [implemented]
-│   │   └── image_digitizer.py       # PNG/JPG plot -> Spectrum, for clean single-source plot exports [implemented]
-│   ├── preprocessing/
-│   │   ├── baseline.py             # ALS baseline correction        [implemented]
-│   │   ├── smoothing.py            # Savitzky-Golay noise reduction [implemented]
-│   │   └── grid.py                 # Resampling / normalization     [implemented]
-│   ├── features/
-│   │   └── peaks.py                # Peak picking + shape classification [implemented]
-│   ├── models/
-│   │   ├── correlation_table.py    # IR rule data                   [implemented]
-│   │   ├── rule_engine.py          # Phase 1 classifier              [implemented]
-│   │   ├── classical_ml.py         # Phase 2                         [planned]
-│   │   └── cnn.py                  # Phase 3 classifier               [implemented]
-│   ├── synthetic/
-│   │   └── generator.py            # Synthetic spectra for CNN training (bootstrap for M3) [implemented]
-│   ├── evaluation/                 # Benchmarking against known spectra [planned]
-│   └── cli.py                      # End-to-end CLI entry point (--model rule|cnn) [implemented]
-├── scripts/
-│   └── train_cnn.py                # Trains + evaluates the Phase 3 CNN [implemented]
-├── models_ckpt/                     # Saved CNN checkpoints (gitignored except .gitkeep)
-└── tests/
-    ├── test_parsers.py
-    ├── test_peaks.py
-    ├── test_rule_engine.py
-    └── test_cnn.py
-=======
 ├── docs/
 │   ├── correlation-table.md        # IR peak-region reference (chemistry track)
 │   ├── architecture.md
@@ -206,7 +117,6 @@ spectre/
 ├── notebooks/                      # Exploratory analysis
 ├── tests/
 └── requirements.txt
->>>>>>> 85814506aca72b1d0689f58aaf9bcf6ae204c656
 ```
 
 ---
@@ -250,30 +160,13 @@ The same five-stage architecture is designed to generalize to NMR:
 - [ ] **M2**: Rule-based classifier reproducing correlation-table logic, benchmarked on known compounds
 - [ ] **M3**: Labeled dataset built via SMARTS auto-labeling (target: 500+ compounds)
 - [ ] **M4**: Classical ML model beating rule-based baseline
-<<<<<<< HEAD
-- [x] **M5**: 1D-CNN model (`spectre/models/cnn.py`, `scripts/train_cnn.py`) — bootstrapped on synthetic data since M3 isn't done yet; swap in real labeled data once M3 lands. Peak-evidence attribution is intentionally *not* provided by the CNN (see its docstring) — cross-check with `--model rule` for interpretability.
-=======
 - [ ] **M5**: 1D-CNN model, peak-evidence attribution for interpretability
->>>>>>> 85814506aca72b1d0689f58aaf9bcf6ae204c656
 - [ ] **M6**: Public release (PyPI package + documentation site)
 - [ ] **M7**: NMR ingestion + feature extraction module
 - [ ] **M8**: NMR classifier, feature parity with IR module
 
 ---
 
-<<<<<<< HEAD
-## 9.5 Web Tool
-
-A self-contained, client-side front end (`web/index.html`) lets anyone in
-the IISER network run a spectrum through the Phase 1 rule engine from a
-browser, with no install — the repository now exposes it from the root
-page at GitHub Pages, so the app opens via
-`https://itsmilindsahu.github.io/Spectre/` without needing the `/web/`
-folder in the URL. See `web/README.md` for deployment and central-logging
-setup.
-
-=======
->>>>>>> 85814506aca72b1d0689f58aaf9bcf6ae204c656
 ## 10. Contributing
 
 This project is in early proposal stage. Contribution guidelines, code of conduct, and issue templates will be added once the M1–M2 baseline is public. Early collaborators with cheminformatics, spectroscopy, or ML backgrounds are welcome to reach out.
