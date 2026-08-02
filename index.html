@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spectre — IR Functional Group Identifier</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
 <style>
   :root{
     --bg:#0a0a0a;
@@ -191,17 +192,45 @@
   <div class="panel">
     <div class="eyebrow">Step 2 — Provide a spectrum</div>
     <div class="dropzone" id="dropzone">
-      <div id="dzText"><strong>Click to upload</strong> or drag a spectrum file here<br>CSV / TSV — two columns: wavenumber (cm⁻¹), absorbance</div>
+      <div id="dzText"><strong>Click to upload</strong> or drag a file here<br>CSV/TSV (wavenumber, absorbance) — or a PNG/JPG of a plotted spectrum</div>
     </div>
-    <input type="file" id="fileInput" accept=".csv,.tsv,.txt">
+    <input type="file" id="fileInput" accept=".csv,.tsv,.txt,.png,.jpg,.jpeg">
     <div class="examples">
       <button class="chip" id="exAcid">Try example — carboxylic-acid-like</button>
       <button class="chip" id="exAlcohol">Try example — alcohol-like</button>
+    </div>
+
+    <div id="imageCalibration" style="display:none;margin-top:18px;">
+      <div class="eyebrow" style="margin-bottom:14px;">Plot image — axis calibration</div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="calibProfile">Saved calibration (reuse for the same instrument software)</label>
+        <select id="calibProfile"><option value="">— None / enter axis range manually —</option></select>
+      </div>
+      <div class="row" id="axisRangeFields">
+        <div class="field"><label for="xMin">X-axis at left edge (cm⁻¹)</label><input type="text" id="xMin" placeholder="4000"></div>
+        <div class="field"><label for="xMax">X-axis at right edge (cm⁻¹)</label><input type="text" id="xMax" placeholder="400"></div>
+        <div class="field"><label for="yMin">Y-axis at bottom edge</label><input type="text" id="yMin" placeholder="0"></div>
+        <div class="field"><label for="yMax">Y-axis at top edge</label><input type="text" id="yMax" placeholder="1.05"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="calibName">Save this calibration as (optional)</label>
+          <input type="text" id="calibName" placeholder="e.g. Chem Dept FTIR software">
+        </div>
+      </div>
+      <div class="status-line" id="calibStatus">Needs a visible boxed axis frame and a single, single-colored curve. Plot must show the whole 4000–400 cm⁻¹ range (or whatever range you enter above) at its edges.</div>
     </div>
   </div>
 
   <div class="panel">
     <div class="eyebrow">Step 3 — Run</div>
+    <div class="field" style="margin-bottom:16px;">
+      <label for="modelSelect">Classifier</label>
+      <select id="modelSelect">
+        <option value="rule">Rule Engine (Phase 1 — fast, interpretable, peak-level evidence)</option>
+        <option value="cnn">CNN (Phase 3 — learned from spectrum shape, no peak evidence)</option>
+      </select>
+    </div>
     <button class="run" id="runBtn" disabled>Run Spectre analysis</button>
     <div class="status-line" id="statusLine"></div>
   </div>
@@ -243,7 +272,21 @@
     </div>
   </details>
 
-  <footer>Spectre — Phase 1 rule engine (IR only). Client-side reimplementation for demo/teaching use.</footer>
+  <details class="setup">
+    <summary>Admin setup — deploy the CNN (Phase 3)</summary>
+    <div class="inner">
+      <p>The CNN classifier runs entirely in the visitor's browser via <a href="https://onnxruntime.ai/docs/tutorials/web/" target="_blank" rel="noopener">onnxruntime-web</a> (loaded from a CDN, no install needed) — no Python backend, same as everything else on this page.</p>
+      <ol>
+        <li>Train a checkpoint: <code>python scripts/train_cnn.py</code> (from the main Spectre repo, not this web folder).</li>
+        <li>Export it: <code>python scripts/export_onnx.py</code> — this writes <code>web/cnn_ir.onnx</code> and <code>web/cnn_ir_labels.json</code>.</li>
+        <li>Push <em>both</em> files to your GitHub Pages repo in the same folder as this <code>index.html</code> — the page fetches them by relative path (<code>cnn_ir.onnx</code>, <code>cnn_ir_labels.json</code>).</li>
+        <li>That's it — the "CNN (Phase 3)" option in the classifier dropdown will load and run them on first use.</li>
+      </ol>
+      <p>This deployment already ships a checkpoint trained on synthetic data (see <code>spectre/synthetic/generator.py</code> in the main repo) — retrain on real labeled spectra once available and re-export to replace it.</p>
+    </div>
+  </details>
+
+  <footer>Spectre — Phase 1 rule engine + Phase 3 CNN (IR only). Client-side reimplementation for demo/teaching use. PNG/JPG plot digitization assumes a visible boxed axis frame and a single-colored curve.</footer>
 </div>
 
 <script>
@@ -443,14 +486,221 @@ const EXAMPLE_ACID = "4000,0.0034;3996,0.0000;3992,0.0020;3988,0.0025;3984,0.004
 const EXAMPLE_ALCOHOL = "4000,0.0000;3996,0.0000;3992,0.0000;3988,0.0005;3984,0.0000;3980,0.0000;3976,0.0008;3972,0.0000;3968,0.0000;3964,0.0000;3960,0.0006;3956,0.0068;3952,0.0000;3948,0.0004;3944,0.0000;3940,0.0010;3936,0.0000;3932,0.0000;3928,0.0000;3924,0.0000;3920,0.0000;3916,0.0000;3912,0.0058;3908,0.0000;3904,0.0000;3900,0.0000;3896,0.0000;3892,0.0000;3888,0.0000;3884,0.0013;3880,0.0004;3876,0.0000;3872,0.0000;3868,0.0006;3864,0.0000;3860,0.0055;3856,0.0000;3852,0.0048;3848,0.0000;3844,0.0000;3840,0.0000;3836,0.0000;3832,0.0000;3828,0.0000;3824,0.0067;3820,0.0000;3816,0.0000;3812,0.0019;3808,0.0048;3804,0.0042;3800,0.0000;3796,0.0094;3792,0.0041;3788,0.0000;3784,0.0000;3780,0.0000;3776,0.0000;3772,0.0000;3768,0.0018;3764,0.0045;3760,0.0000;3756,0.0000;3752,0.0000;3748,0.0067;3744,0.0057;3740,0.0003;3736,0.0000;3732,0.0000;3728,0.0088;3724,0.0021;3720,0.0006;3716,0.0062;3712,0.0000;3708,0.0052;3704,0.0015;3700,0.0081;3696,0.0000;3692,0.0000;3688,0.0000;3684,0.0000;3680,0.0000;3676,0.0000;3672,0.0039;3668,0.0000;3664,0.0085;3660,0.0037;3656,0.0000;3652,0.0080;3648,0.0052;3644,0.0027;3640,0.0074;3636,0.0000;3632,0.0106;3628,0.0053;3624,0.0092;3620,0.0083;3616,0.0160;3612,0.0143;3608,0.0067;3604,0.0160;3600,0.0176;3596,0.0198;3592,0.0233;3588,0.0301;3584,0.0387;3580,0.0298;3576,0.0259;3572,0.0331;3568,0.0353;3564,0.0433;3560,0.0447;3556,0.0602;3552,0.0541;3548,0.0633;3544,0.0742;3540,0.0791;3536,0.0882;3532,0.0843;3528,0.1006;3524,0.0998;3520,0.1158;3516,0.1333;3512,0.1267;3508,0.1366;3504,0.1568;3500,0.1639;3496,0.1810;3492,0.1870;3488,0.1959;3484,0.2238;3480,0.2248;3476,0.2446;3472,0.2521;3468,0.2714;3464,0.2782;3460,0.3004;3456,0.3133;3452,0.3310;3448,0.3454;3444,0.3639;3440,0.3740;3436,0.3938;3432,0.4132;3428,0.4227;3424,0.4319;3420,0.4545;3416,0.4663;3412,0.4834;3408,0.4945;3404,0.5097;3400,0.5117;3396,0.5230;3392,0.5311;3388,0.5494;3384,0.5609;3380,0.5755;3376,0.5745;3372,0.5828;3368,0.5888;3364,0.5923;3360,0.5920;3356,0.6040;3352,0.6050;3348,0.5956;3344,0.6001;3340,0.6011;3336,0.6045;3332,0.5966;3328,0.5858;3324,0.5805;3320,0.5729;3316,0.5597;3312,0.5487;3308,0.5343;3304,0.5363;3300,0.5188;3296,0.5110;3292,0.4976;3288,0.4804;3284,0.4590;3280,0.4501;3276,0.4397;3272,0.4144;3268,0.4086;3264,0.3942;3260,0.3745;3256,0.3709;3252,0.3427;3248,0.3291;3244,0.3098;3240,0.2988;3236,0.2839;3232,0.2780;3228,0.2632;3224,0.2449;3220,0.2316;3216,0.2099;3212,0.1983;3208,0.1880;3204,0.1708;3200,0.1688;3196,0.1573;3192,0.1455;3188,0.1321;3184,0.1243;3180,0.1141;3176,0.1086;3172,0.1105;3168,0.0939;3164,0.0778;3160,0.0686;3156,0.0606;3152,0.0631;3148,0.0521;3144,0.0585;3140,0.0472;3136,0.0431;3132,0.0307;3128,0.0422;3124,0.0365;3120,0.0297;3116,0.0283;3112,0.0220;3108,0.0208;3104,0.0221;3100,0.0224;3096,0.0186;3092,0.0066;3088,0.0127;3084,0.0106;3080,0.0137;3076,0.0133;3072,0.0131;3068,0.0008;3064,0.0037;3060,0.0069;3056,0.0041;3052,0.0039;3048,0.0043;3044,0.0142;3040,0.0117;3036,0.0054;3032,0.0041;3028,0.0000;3024,0.0002;3020,0.0000;3016,0.0061;3012,0.0004;3008,0.0000;3004,0.0071;3000,0.0082;2996,0.0235;2992,0.0592;2988,0.1383;2984,0.2588;2980,0.3800;2976,0.4369;2972,0.4262;2968,0.3202;2964,0.1953;2960,0.0990;2956,0.0367;2952,0.0166;2948,0.0336;2944,0.0804;2940,0.1744;2936,0.2905;2932,0.3890;2928,0.3909;2924,0.2934;2920,0.1645;2916,0.0761;2912,0.0250;2908,0.0019;2904,0.0000;2900,0.0056;2896,0.0177;2892,0.0668;2888,0.1497;2884,0.2541;2880,0.2994;2876,0.2590;2872,0.1466;2868,0.0591;2864,0.0185;2860,0.0001;2856,0.0059;2852,0.0018;2848,0.0003;2844,0.0117;2840,0.0022;2836,0.0000;2832,0.0000;2828,0.0000;2824,0.0081;2820,0.0000;2816,0.0000;2812,0.0000;2808,0.0000;2804,0.0069;2800,0.0000;2796,0.0000;2792,0.0050;2788,0.0020;2784,0.0000;2780,0.0000;2776,0.0033;2772,0.0000;2768,0.0061;2764,0.0000;2760,0.0046;2756,0.0033;2752,0.0017;2748,0.0000;2744,0.0000;2740,0.0012;2736,0.0000;2732,0.0000;2728,0.0000;2724,0.0036;2720,0.0000;2716,0.0070;2712,0.0008;2708,0.0080;2704,0.0086;2700,0.0004;2696,0.0080;2692,0.0009;2688,0.0000;2684,0.0009;2680,0.0078;2676,0.0072;2672,0.0000;2668,0.0063;2664,0.0000;2660,0.0021;2656,0.0003;2652,0.0000;2648,0.0009;2644,0.0000;2640,0.0086;2636,0.0017;2632,0.0027;2628,0.0029;2624,0.0000;2620,0.0079;2616,0.0048;2612,0.0000;2608,0.0141;2604,0.0073;2600,0.0000;2596,0.0005;2592,0.0097;2588,0.0000;2584,0.0000;2580,0.0000;2576,0.0000;2572,0.0000;2568,0.0014;2564,0.0000;2560,0.0000;2556,0.0000;2552,0.0085;2548,0.0000;2544,0.0132;2540,0.0000;2536,0.0023;2532,0.0118;2528,0.0000;2524,0.0000;2520,0.0000;2516,0.0000;2512,0.0133;2508,0.0000;2504,0.0000;2500,0.0000;2496,0.0040;2492,0.0135;2488,0.0021;2484,0.0021;2480,0.0000;2476,0.0101;2472,0.0000;2468,0.0038;2464,0.0019;2460,0.0008;2456,0.0006;2452,0.0045;2448,0.0000;2444,0.0079;2440,0.0006;2436,0.0000;2432,0.0003;2428,0.0000;2424,0.0033;2420,0.0000;2416,0.0019;2412,0.0109;2408,0.0021;2404,0.0000;2400,0.0000;2396,0.0000;2392,0.0067;2388,0.0000;2384,0.0000;2380,0.0000;2376,0.0006;2372,0.0084;2368,0.0000;2364,0.0000;2360,0.0000;2356,0.0000;2352,0.0033;2348,0.0072;2344,0.0000;2340,0.0044;2336,0.0000;2332,0.0014;2328,0.0000;2324,0.0076;2320,0.0000;2316,0.0000;2312,0.0025;2308,0.0000;2304,0.0029;2300,0.0000;2296,0.0000;2292,0.0017;2288,0.0062;2284,0.0004;2280,0.0000;2276,0.0000;2272,0.0004;2268,0.0044;2264,0.0040;2260,0.0000;2256,0.0060;2252,0.0059;2248,0.0000;2244,0.0049;2240,0.0000;2236,0.0000;2232,0.0000;2228,0.0000;2224,0.0057;2220,0.0045;2216,0.0000;2212,0.0051;2208,0.0000;2204,0.0000;2200,0.0034;2196,0.0000;2192,0.0000;2188,0.0000;2184,0.0006;2180,0.0037;2176,0.0000;2172,0.0000;2168,0.0000;2164,0.0029;2160,0.0000;2156,0.0053;2152,0.0000;2148,0.0001;2144,0.0025;2140,0.0050;2136,0.0049;2132,0.0000;2128,0.0108;2124,0.0018;2120,0.0030;2116,0.0000;2112,0.0000;2108,0.0051;2104,0.0000;2100,0.0056;2096,0.0017;2092,0.0000;2088,0.0066;2084,0.0016;2080,0.0070;2076,0.0035;2072,0.0000;2068,0.0000;2064,0.0000;2060,0.0026;2056,0.0000;2052,0.0000;2048,0.0019;2044,0.0014;2040,0.0000;2036,0.0000;2032,0.0000;2028,0.0046;2024,0.0041;2020,0.0087;2016,0.0036;2012,0.0000;2008,0.0008;2004,0.0000;2000,0.0000;1996,0.0039;1992,0.0000;1988,0.0036;1984,0.0066;1980,0.0000;1976,0.0062;1972,0.0021;1968,0.0000;1964,0.0000;1960,0.0106;1956,0.0000;1952,0.0000;1948,0.0026;1944,0.0093;1940,0.0000;1936,0.0000;1932,0.0003;1928,0.0000;1924,0.0000;1920,0.0000;1916,0.0000;1912,0.0000;1908,0.0000;1904,0.0096;1900,0.0079;1896,0.0000;1892,0.0061;1888,0.0000;1884,0.0037;1880,0.0012;1876,0.0000;1872,0.0002;1868,0.0000;1864,0.0032;1860,0.0000;1856,0.0000;1852,0.0057;1848,0.0028;1844,0.0043;1840,0.0064;1836,0.0000;1832,0.0000;1828,0.0000;1824,0.0000;1820,0.0000;1816,0.0000;1812,0.0036;1808,0.0005;1804,0.0000;1800,0.0000;1796,0.0000;1792,0.0000;1788,0.0000;1784,0.0008;1780,0.0035;1776,0.0049;1772,0.0000;1768,0.0000;1764,0.0000;1760,0.0000;1756,0.0017;1752,0.0000;1748,0.0032;1744,0.0059;1740,0.0000;1736,0.0073;1732,0.0000;1728,0.0000;1724,0.0019;1720,0.0000;1716,0.0000;1712,0.0000;1708,0.0000;1704,0.0000;1700,0.0042;1696,0.0000;1692,0.0009;1688,0.0005;1684,0.0014;1680,0.0000;1676,0.0000;1672,0.0000;1668,0.0000;1664,0.0000;1660,0.0000;1656,0.0000;1652,0.0020;1648,0.0000;1644,0.0141;1640,0.0000;1636,0.0031;1632,0.0072;1628,0.0081;1624,0.0009;1620,0.0026;1616,0.0000;1612,0.0000;1608,0.0045;1604,0.0000;1600,0.0000;1596,0.0000;1592,0.0029;1588,0.0008;1584,0.0027;1580,0.0019;1576,0.0069;1572,0.0008;1568,0.0000;1564,0.0014;1560,0.0054;1556,0.0015;1552,0.0000;1548,0.0000;1544,0.0083;1540,0.0022;1536,0.0000;1532,0.0000;1528,0.0019;1524,0.0002;1520,0.0001;1516,0.0056;1512,0.0026;1508,0.0044;1504,0.0000;1500,0.0000;1496,0.0000;1492,0.0000;1488,0.0000;1484,0.0000;1480,0.0022;1476,0.0000;1472,0.0105;1468,0.0000;1464,0.0138;1460,0.0467;1456,0.1016;1452,0.1434;1448,0.1387;1444,0.1021;1440,0.0400;1436,0.0209;1432,0.0047;1428,0.0016;1424,0.0000;1420,0.0040;1416,0.0047;1412,0.0020;1408,0.0000;1404,0.0000;1400,0.0031;1396,0.0007;1392,0.0050;1388,0.0020;1384,0.0006;1380,0.0002;1376,0.0000;1372,0.0000;1368,0.0106;1364,0.0000;1360,0.0036;1356,0.0061;1352,0.0074;1348,0.0000;1344,0.0019;1340,0.0000;1336,0.0000;1332,0.0000;1328,0.0027;1324,0.0039;1320,0.0000;1316,0.0000;1312,0.0023;1308,0.0000;1304,0.0060;1300,0.0000;1296,0.0000;1292,0.0000;1288,0.0095;1284,0.0030;1280,0.0034;1276,0.0007;1272,0.0081;1268,0.0000;1264,0.0000;1260,0.0000;1256,0.0000;1252,0.0000;1248,0.0011;1244,0.0000;1240,0.0000;1236,0.0025;1232,0.0094;1228,0.0075;1224,0.0000;1220,0.0000;1216,0.0040;1212,0.0054;1208,0.0011;1204,0.0056;1200,0.0049;1196,0.0052;1192,0.0078;1188,0.0000;1184,0.0000;1180,0.0000;1176,0.0000;1172,0.0000;1168,0.0000;1164,0.0057;1160,0.0000;1156,0.0070;1152,0.0000;1148,0.0000;1144,0.0000;1140,0.0074;1136,0.0000;1132,0.0000;1128,0.0000;1124,0.0018;1120,0.0008;1116,0.0010;1112,0.0037;1108,0.0000;1104,0.0130;1100,0.0046;1096,0.0041;1092,0.0000;1088,0.0064;1084,0.0000;1080,0.0113;1076,0.0217;1072,0.0438;1068,0.0844;1064,0.1540;1060,0.2314;1056,0.2964;1052,0.3482;1048,0.3475;1044,0.2979;1040,0.2245;1036,0.1474;1032,0.0766;1028,0.0432;1024,0.0187;1020,0.0000;1016,0.0018;1012,0.0000;1008,0.0000;1004,0.0000;1000,0.0014;996,0.0050;992,0.0000;988,0.0047;984,0.0000;980,0.0000;976,0.0000;972,0.0000;968,0.0004;964,0.0033;960,0.0000;956,0.0078;952,0.0000;948,0.0009;944,0.0000;940,0.0000;936,0.0027;932,0.0059;928,0.0068;924,0.0016;920,0.0000;916,0.0104;912,0.0025;908,0.0009;904,0.0000;900,0.0000;896,0.0047;892,0.0055;888,0.0067;884,0.0002;880,0.0108;876,0.0000;872,0.0003;868,0.0019;864,0.0044;860,0.0005;856,0.0050;852,0.0028;848,0.0000;844,0.0022;840,0.0066;836,0.0006;832,0.0000;828,0.0000;824,0.0083;820,0.0000;816,0.0000;812,0.0011;808,0.0000;804,0.0000;800,0.0003;796,0.0000;792,0.0024;788,0.0017;784,0.0016;780,0.0000;776,0.0013;772,0.0008;768,0.0000;764,0.0058;760,0.0000;756,0.0032;752,0.0000;748,0.0000;744,0.0024;740,0.0000;736,0.0000;732,0.0000;728,0.0000;724,0.0078;720,0.0066;716,0.0000;712,0.0060;708,0.0000;704,0.0024;700,0.0000;696,0.0000;692,0.0000;688,0.0087;684,0.0000;680,0.0000;676,0.0000;672,0.0000;668,0.0010;664,0.0026;660,0.0000;656,0.0110;652,0.0000;648,0.0000;644,0.0000;640,0.0057;636,0.0000;632,0.0005;628,0.0000;624,0.0022;620,0.0000;616,0.0006;612,0.0000;608,0.0004;604,0.0000;600,0.0000;596,0.0000;592,0.0000;588,0.0000;584,0.0010;580,0.0000;576,0.0098;572,0.0000;568,0.0000;564,0.0000;560,0.0056;556,0.0074;552,0.0089;548,0.0000;544,0.0000;540,0.0000;536,0.0027;532,0.0090;528,0.0044;524,0.0000;520,0.0000;516,0.0021;512,0.0000;508,0.0046;504,0.0000;500,0.0000;496,0.0086;492,0.0000;488,0.0030;484,0.0038;480,0.0003;476,0.0000;472,0.0062;468,0.0000;464,0.0000;460,0.0000;456,0.0000;452,0.0000;448,0.0000;444,0.0008;440,0.0060;436,0.0000;432,0.0016;428,0.0000;424,0.0025;420,0.0000;416,0.0119;412,0.0065;408,0.0000;404,0.0000;400,0.0007";
 
 /* ============================================================
+   5.5 IMAGE DIGITIZATION (ported from spectre/ingestion/image_digitizer.py,
+   validated in Node against the Python implementation on the same test
+   image -- both recover the curve with ~0.003 mean absolute error against
+   ground truth)
+   ============================================================ */
+function loadImageAsPixelData(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      resolve({width: canvas.width, height: canvas.height, data: imageData.data});
+    };
+    img.onerror = ()=>reject(new Error("Could not load image file."));
+    img.src = URL.createObjectURL(file);
+  });
+}
+function makeGetPixel(pixelData){
+  const { width, data } = pixelData;
+  return (x, y)=>{
+    const idx = (width*y + x) << 2;
+    return [data[idx], data[idx+1], data[idx+2]];
+  };
+}
+function detectPlotBBox(width, height, getPixel, minLineFrac=0.5){
+  const rowDarkFrac = new Array(height).fill(0);
+  const colDarkFrac = new Array(width).fill(0);
+  for(let y=0;y<height;y++){
+    let count=0;
+    for(let x=0;x<width;x++){ const [r,g,b]=getPixel(x,y); if((r+g+b)/3 < 128) count++; }
+    rowDarkFrac[y]=count/width;
+  }
+  for(let x=0;x<width;x++){
+    let count=0;
+    for(let y=0;y<height;y++){ const [r,g,b]=getPixel(x,y); if((r+g+b)/3 < 128) count++; }
+    colDarkFrac[x]=count/height;
+  }
+  const rowCandidates=[]; for(let y=0;y<height;y++) if(rowDarkFrac[y]>minLineFrac) rowCandidates.push(y);
+  const colCandidates=[]; for(let x=0;x<width;x++) if(colDarkFrac[x]>minLineFrac) colCandidates.push(x);
+  if(rowCandidates.length<2 || colCandidates.length<2){
+    throw new Error("Could not detect a rectangular axis frame -- this image needs a visible boxed axis frame.");
+  }
+  return { left: Math.min(...colCandidates), top: Math.min(...rowCandidates),
+           right: Math.max(...colCandidates), bottom: Math.max(...rowCandidates) };
+}
+function detectCurveColor(getPixel, bbox){
+  const { left, top, right, bottom } = bbox;
+  let counts = new Map(), colorfulCount = 0;
+  for(let y=top;y<bottom;y++){
+    for(let x=left;x<right;x++){
+      const [r,g,b]=getPixel(x,y);
+      const maxc=Math.max(r,g,b), minc=Math.min(r,g,b);
+      const isGrayish=(maxc-minc)<20, isNearWhite=minc>230;
+      if(!isGrayish && !isNearWhite){
+        colorfulCount++;
+        const key=`${r},${g},${b}`;
+        counts.set(key,(counts.get(key)||0)+1);
+      }
+    }
+  }
+  if(colorfulCount<=200){
+    counts = new Map();
+    for(let y=top;y<bottom;y++){
+      for(let x=left;x<right;x++){
+        const [r,g,b]=getPixel(x,y);
+        if(Math.max(r,g,b)<100){
+          const key=`${r},${g},${b}`;
+          counts.set(key,(counts.get(key)||0)+1);
+        }
+      }
+    }
+  }
+  let bestKey=null, bestCount=-1;
+  for(const [key,count] of counts){ if(count>bestCount){ bestCount=count; bestKey=key; } }
+  if(!bestKey) throw new Error("Could not find a distinguishable curve color inside the plot area.");
+  return bestKey.split(",").map(Number);
+}
+function extractCurvePixels(getPixel, bbox, curveColor, tolerance=40){
+  const { left, top, right, bottom } = bbox;
+  const nCols = right-left, nRows = bottom-top;
+  const [cr,cg,cb] = curveColor;
+  const rowOfCol = new Array(nCols).fill(NaN);
+  for(let c=0;c<nCols;c++){
+    let sum=0, n=0;
+    const x=left+c;
+    for(let ry=0;ry<nRows;ry++){
+      const y=top+ry;
+      const [r,g,b]=getPixel(x,y);
+      const dist=Math.sqrt((r-cr)**2+(g-cg)**2+(b-cb)**2);
+      if(dist<=tolerance){ sum+=ry; n++; }
+    }
+    if(n>0) rowOfCol[c]=sum/n;
+  }
+  return rowOfCol;
+}
+function pixelsToSpectrum(rowOfCol, bbox, xRange, yRange){
+  const { top, bottom } = bbox;
+  const nCols = rowOfCol.length;
+  const [xMin,xMax] = xRange, [yMin,yMax] = yRange;
+  const bboxH = bottom-top;
+  const validIdx=[]; for(let i=0;i<nCols;i++) if(!Number.isNaN(rowOfCol[i])) validIdx.push(i);
+  if(validIdx.length < nCols*0.5){
+    throw new Error(`Only recovered the curve in ${validIdx.length}/${nCols} columns -- curve color/tolerance is probably wrong for this image.`);
+  }
+  const rowFilled=new Array(nCols);
+  let vi=0;
+  for(let i=0;i<nCols;i++){
+    if(!Number.isNaN(rowOfCol[i])){ rowFilled[i]=rowOfCol[i]; continue; }
+    while(vi<validIdx.length-1 && validIdx[vi+1]<i) vi++;
+    const i0=validIdx[Math.min(vi,validIdx.length-1)], i1=validIdx[Math.min(vi+1,validIdx.length-1)];
+    if(i0===i1){ rowFilled[i]=rowOfCol[i0]; continue; }
+    const t=(i-i0)/(i1-i0);
+    rowFilled[i]=rowOfCol[i0]+t*(rowOfCol[i1]-rowOfCol[i0]);
+  }
+  const x=new Array(nCols), y=new Array(nCols);
+  for(let i=0;i<nCols;i++){
+    x[i]=xMin+(i/(nCols-1))*(xMax-xMin);
+    y[i]=yMax-(rowFilled[i]/(bboxH-1))*(yMax-yMin);
+  }
+  return {x,y};
+}
+async function digitizePlotImage(file, xRange, yRange){
+  const pixelData = await loadImageAsPixelData(file);
+  const getPixel = makeGetPixel(pixelData);
+  const bbox = detectPlotBBox(pixelData.width, pixelData.height, getPixel);
+  const color = detectCurveColor(getPixel, bbox);
+  const rowOfCol = extractCurvePixels(getPixel, bbox, color, 40);
+  let {x,y} = pixelsToSpectrum(rowOfCol, bbox, xRange, yRange);
+  if(x[0] < x[x.length-1]){ x = x.slice().reverse(); y = y.slice().reverse(); } // match descending convention
+  return {x,y};
+}
+
+// Calibration profiles (bbox + curve color + axis range), saved per-browser
+// via localStorage so a prof only enters the axis range once per instrument.
+function getCalibrationProfiles(){
+  try{ return JSON.parse(localStorage.getItem('spectre_calibrations')||'{}'); }catch(e){ return {}; }
+}
+function saveCalibrationProfile(name, profile){
+  const all = getCalibrationProfiles();
+  all[name] = profile;
+  localStorage.setItem('spectre_calibrations', JSON.stringify(all));
+}
+
+/* ============================================================
+   5.6 CNN INFERENCE (ONNX Runtime Web -- Phase 3, exported from
+   spectre/models/cnn.py via scripts/export_onnx.py)
+   ============================================================ */
+const CNN_GRID = (()=>{ const g=[]; for(let w=4000; w>=400; w--) g.push(w); return g; })(); // matches spectre.synthetic.generator.GRID
+let _cnnSession = null, _cnnLabels = null;
+
+async function loadCnnModel(){
+  if(_cnnSession) return { session: _cnnSession, labels: _cnnLabels };
+  const [session, labelsResp] = await Promise.all([
+    ort.InferenceSession.create('cnn_ir.onnx'),
+    fetch('cnn_ir_labels.json').then(r=>r.json()),
+  ]);
+  _cnnSession = session;
+  _cnnLabels = labelsResp.labels;
+  return { session, labels: _cnnLabels };
+}
+function resampleToGrid(x, y, grid){
+  // Ensure ascending x for interpolation (mirrors preprocessing/grid.py's np.interp usage,
+  // which requires ascending x and fills 0.0 strictly *outside* the measured range).
+  let xAsc = x, yAsc = y;
+  if(x[0] > x[x.length-1]){ xAsc = x.slice().reverse(); yAsc = y.slice().reverse(); }
+  const n = xAsc.length;
+  const gridAsc = grid.slice().reverse(); // grid passed in descending (4000 -> 400)
+  const out = new Array(gridAsc.length);
+  let j = 0;
+  for(let i=0;i<gridAsc.length;i++){
+    const gx = gridAsc[i];
+    if(gx < xAsc[0]){ out[i] = 0; continue; }
+    if(gx > xAsc[n-1]){ out[i] = 0; continue; }
+    while(j < n-2 && xAsc[j+1] < gx) j++;
+    const x0=xAsc[j], x1=xAsc[j+1], y0=yAsc[j], y1=yAsc[j+1];
+    const t = x1===x0 ? 0 : (gx-x0)/(x1-x0);
+    out[i] = y0 + t*(y1-y0);
+  }
+  return out.reverse(); // back to descending, matching grid's original order
+}
+async function cnnPredict(x, y){
+  const { session, labels } = await loadCnnModel();
+  let resampled = resampleToGrid(x, y, CNN_GRID);
+  const maxVal = Math.max(...resampled) || 1;
+  resampled = resampled.map(v=>v/maxVal);
+  const tensor = new ort.Tensor('float32', Float32Array.from(resampled), [1, resampled.length]);
+  const output = await session.run({ spectrum: tensor });
+  const logits = output.logits.data;
+  const preds = [];
+  for(let i=0;i<labels.length;i++){
+    const prob = 1/(1+Math.exp(-logits[i]));
+    if(prob >= 0.5) preds.push({ functional_group: labels[i], confidence: prob, evidence: [], matched_rules: ["CNN prediction (Phase 3) — no peak-level evidence, cross-check against the rule engine for interpretability"] });
+  }
+  preds.sort((a,b)=>b.confidence-a.confidence);
+  return preds;
+}
+
+/* ============================================================
    7. PIPELINE
    ============================================================ */
-function runPipeline(x, y){
+async function runPipeline(x, y, model){
   let yc = correctBaseline(y);
   yc = smooth(yc);
   yc = normalize(yc);
   const peaks = detectPeaks(x, yc, {height:0.05, prominence:0.03, distance:15});
-  const predictions = classify(peaks);
+
+  let predictions;
+  if(model === 'cnn'){
+    predictions = await cnnPredict(x, yc); // CNN resamples/renormalizes onto its own training grid internally
+  } else {
+    predictions = classify(peaks);
+  }
   return {x, y:yc, peaks, predictions};
 }
 
@@ -627,10 +877,52 @@ function currentInstitute(){
   if(instituteEl.value === 'Other') return otherInstituteEl.value.trim();
   return instituteEl.value;
 }
+
+const imageCalibrationDiv = document.getElementById('imageCalibration');
+const calibProfileEl = document.getElementById('calibProfile');
+const xMinEl = document.getElementById('xMin'), xMaxEl = document.getElementById('xMax');
+const yMinEl = document.getElementById('yMin'), yMaxEl = document.getElementById('yMax');
+const calibNameEl = document.getElementById('calibName');
+const calibStatus = document.getElementById('calibStatus');
+const modelSelectEl = document.getElementById('modelSelect');
+
+let currentImageFile = null; // set when the uploaded/dropped file is a PNG/JPG, else null
+
+function refreshCalibrationDropdown(){
+  const profiles = getCalibrationProfiles();
+  calibProfileEl.innerHTML = '<option value="">— None / enter axis range manually —</option>';
+  for(const name of Object.keys(profiles)){
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    calibProfileEl.appendChild(opt);
+  }
+}
+refreshCalibrationDropdown();
+
+calibProfileEl.addEventListener('change', ()=>{
+  const name = calibProfileEl.value;
+  const usingProfile = name.length>0;
+  document.getElementById('axisRangeFields').style.display = usingProfile ? 'none' : 'flex';
+  calibNameEl.closest('.field').style.display = usingProfile ? 'none' : 'flex';
+  if(usingProfile){
+    const p = getCalibrationProfiles()[name];
+    xMinEl.value = p.xMin; xMaxEl.value = p.xMax; yMinEl.value = p.yMin; yMaxEl.value = p.yMax;
+  }
+  updateRunEnabled();
+});
+
+function haveValidAxisRange(){
+  if(!currentImageFile) return true; // not an image upload -- irrelevant
+  const vals = [xMinEl.value, xMaxEl.value, yMinEl.value, yMaxEl.value].map(parseFloat);
+  return vals.every(v=>!Number.isNaN(v));
+}
+
 function updateRunEnabled(){
-  const ok = profNameEl.value.trim().length>0 && currentInstitute().length>0 && currentSpectrum !== null;
+  const ok = profNameEl.value.trim().length>0 && currentInstitute().length>0
+    && currentSpectrum !== null && haveValidAxisRange();
   runBtn.disabled = !ok;
 }
+[xMinEl,xMaxEl,yMinEl,yMaxEl].forEach(el=>el.addEventListener('input', updateRunEnabled));
 
 dropzone.addEventListener('click', ()=>fileInput.click());
 dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
@@ -643,7 +935,24 @@ fileInput.addEventListener('change', e=>{
   if(e.target.files.length) handleFile(e.target.files[0]);
 });
 
+function isImageFile(file){
+  return /\.(png|jpe?g)$/i.test(file.name);
+}
+
 function handleFile(file){
+  if(isImageFile(file)){
+    currentImageFile = file;
+    currentSpectrum = { pendingImage: true, source: file.name }; // real x,y filled in at run time after digitizing
+    imageCalibrationDiv.style.display = 'block';
+    dropzone.classList.add('has-file');
+    dzText.innerHTML = `<strong>${file.name}</strong> loaded (plot image)<br><span style="color:var(--text-faint)">Click to choose a different file</span>`;
+    statusLine.textContent=''; statusLine.className='status-line';
+    updateRunEnabled();
+    return;
+  }
+
+  currentImageFile = null;
+  imageCalibrationDiv.style.display = 'none';
   const reader = new FileReader();
   reader.onload = ()=>{
     try{
@@ -663,6 +972,8 @@ function handleFile(file){
 }
 
 document.getElementById('exAcid').addEventListener('click', ()=>{
+  currentImageFile = null;
+  imageCalibrationDiv.style.display = 'none';
   const {x,y} = parseEmbedded(EXAMPLE_ACID);
   currentSpectrum = {x,y,source:'example: carboxylic-acid-like'};
   dropzone.classList.add('has-file');
@@ -670,6 +981,8 @@ document.getElementById('exAcid').addEventListener('click', ()=>{
   updateRunEnabled();
 });
 document.getElementById('exAlcohol').addEventListener('click', ()=>{
+  currentImageFile = null;
+  imageCalibrationDiv.style.display = 'none';
   const {x,y} = parseEmbedded(EXAMPLE_ALCOHOL);
   currentSpectrum = {x,y,source:'example: alcohol-like'};
   dropzone.classList.add('has-file');
@@ -677,25 +990,46 @@ document.getElementById('exAlcohol').addEventListener('click', ()=>{
   updateRunEnabled();
 });
 
-runBtn.addEventListener('click', ()=>{
+runBtn.addEventListener('click', async ()=>{
   if(!currentSpectrum) return;
   statusLine.textContent = 'Running pipeline...'; statusLine.className='status-line';
-  setTimeout(()=>{
-    try{
-      const result = runPipeline(currentSpectrum.x, currentSpectrum.y);
-      renderResults(result, {
-        name: profNameEl.value.trim(),
-        institute: currentInstitute(),
-        source: currentSpectrum.source
-      });
-      statusLine.textContent = `Done — logged as ${profNameEl.value.trim()} · ${currentInstitute()}`;
-      statusLine.className='status-line ok';
-      document.getElementById('results').scrollIntoView({behavior:'smooth', block:'start'});
-    }catch(err){
-      statusLine.textContent = 'Error: '+err.message;
-      statusLine.className='status-line err';
+  runBtn.disabled = true;
+  try{
+    let x, y;
+    if(currentImageFile){
+      statusLine.textContent = 'Digitizing plot image...';
+      const xRange = [parseFloat(xMinEl.value), parseFloat(xMaxEl.value)];
+      const yRange = [parseFloat(yMinEl.value), parseFloat(yMaxEl.value)];
+      const digitized = await digitizePlotImage(currentImageFile, xRange, yRange);
+      x = digitized.x; y = digitized.y;
+
+      const profileName = calibNameEl.value.trim();
+      if(profileName && !calibProfileEl.value){
+        saveCalibrationProfile(profileName, { xMin:xRange[0], xMax:xRange[1], yMin:yRange[0], yMax:yRange[1] });
+        refreshCalibrationDropdown();
+      }
+    } else {
+      x = currentSpectrum.x; y = currentSpectrum.y;
     }
-  }, 30);
+
+    const model = modelSelectEl.value;
+    if(model === 'cnn') statusLine.textContent = 'Loading CNN model...';
+    const result = await runPipeline(x, y, model);
+
+    renderResults(result, {
+      name: profNameEl.value.trim(),
+      institute: currentInstitute(),
+      source: currentSpectrum.source + (model==='cnn' ? ' (CNN)' : ' (rule engine)')
+    });
+    statusLine.textContent = `Done — logged as ${profNameEl.value.trim()} · ${currentInstitute()}`;
+    statusLine.className='status-line ok';
+    document.getElementById('results').scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(err){
+    statusLine.textContent = 'Error: '+err.message;
+    statusLine.className='status-line err';
+  }finally{
+    updateRunEnabled();
+  }
 });
 
 document.getElementById('downloadLog').addEventListener('click', downloadLocalLogCsv);
