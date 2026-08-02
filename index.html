@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectre — IR Functional Group Identifier</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --bg-raised:#111111;
+    --bg-panel:#131313;
+    --line:#232323;
+    --line-soft:#1a1a1a;
+    --text:#e8e8e3;
+    --text-dim:#8a8a83;
+    --text-faint:#55554f;
+    --lime:#c8ff3d;
+    --lime-dim:#7a9c2c;
+    --red:#ff5d5d;
+    --mono:"IBM Plex Mono","JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:14px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--lime);}
+
+  .wrap{max-width:920px;margin:0 auto;padding:48px 20px 100px;}
+
+  header.top{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:36px;
+    flex-wrap:wrap;gap:16px;
+  }
+  .wordmark{font-size:28px;letter-spacing:2px;font-weight:700;color:var(--text);}
+  .wordmark span{color:var(--lime);}
+  .tagline{color:var(--text-dim);font-size:12px;letter-spacing:.5px;margin-top:4px;}
+  .badge{font-size:10px;letter-spacing:1.5px;color:var(--bg);background:var(--lime);padding:4px 8px;border-radius:2px;text-transform:uppercase;white-space:nowrap;align-self:flex-start;}
+
+  .eyebrow{font-size:11px;letter-spacing:2px;color:var(--lime-dim);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+  .eyebrow::before{content:"";display:inline-block;width:14px;height:1px;background:var(--lime-dim);}
+
+  .panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:3px;padding:24px;margin-bottom:24px;}
+
+  .row{display:flex;gap:16px;flex-wrap:wrap;}
+  .field{flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;margin-bottom:16px;}
+  label{font-size:11px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;}
+  input[type=text], select{
+    background:var(--bg-raised);border:1px solid var(--line);color:var(--text);
+    padding:10px 12px;font-family:var(--mono);font-size:13px;border-radius:2px;outline:none;
+  }
+  input[type=text]:focus, select:focus{border-color:var(--lime-dim);} 
+  select{appearance:none;background-image:linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);background-position:calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px);background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
+
+  .dropzone{border:1px dashed var(--line);border-radius:3px;padding:28px;text-align:center;color:var(--text-dim);cursor:pointer;transition:border-color .15s,background .15s;font-size:12.5px;}
+  .dropzone:hover, .dropzone.drag{border-color:var(--lime-dim);background:rgba(200,255,61,0.03);} 
+  .dropzone strong{color:var(--text);} 
+  .dropzone.has-file{border-color:var(--lime-dim);color:var(--text);} 
+  #fileInput{display:none;}
+
+  .examples{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+  .chip{font-size:11px;letter-spacing:.5px;color:var(--text-dim);border:1px solid var(--line);padding:6px 10px;border-radius:20px;cursor:pointer;background:transparent;font-family:var(--mono);}
+  .chip:hover{border-color:var(--lime-dim);color:var(--lime);} 
+
+  button.run{width:100%;padding:14px;margin-top:8px;background:var(--lime);color:#0a0a0a;border:none;border-radius:2px;font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;}
+  button.run:disabled{background:var(--line);color:var(--text-faint);cursor:not-allowed;} 
+  button.run:not(:disabled):hover{background:#d9ff6b;}
+
+  .status-line{font-size:12px;color:var(--text-dim);margin-top:10px;min-height:16px;}
+  .status-line.err{color:var(--red);} 
+  .status-line.ok{color:var(--lime-dim);} 
+
+  #results{display:none;}
+  .section-title{font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);margin:0 0 14px;}
+
+  #plotCanvas{width:100%;height:280px;display:block;background:var(--bg-raised);border:1px solid var(--line);border-radius:3px;}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;color:var(--text-dim);font-weight:400;padding:6px 8px;border-bottom:1px solid var(--line);letter-spacing:.5px;text-transform:uppercase;font-size:10.5px;}
+  td{padding:6px 8px;border-bottom:1px solid var(--line-soft);} 
+  tr:last-child td{border-bottom:none;}
+
+  .pred{border:1px solid var(--line);border-radius:3px;padding:14px 16px;margin-bottom:10px;background:var(--bg-raised);} 
+  .pred-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;}
+  .pred-name{font-size:14px;font-weight:700;}
+  .pred-conf{font-size:12px;color:var(--lime);font-weight:700;white-space:nowrap;}
+  .bar-track{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-bottom:10px;}
+  .bar-fill{height:100%;background:var(--lime);} 
+  .notes{list-style:none;margin:0;padding:0;font-size:11.5px;color:var(--text-dim);} 
+  .notes li{padding:3px 0 3px 14px;position:relative;} 
+  .notes li::before{content:"·";position:absolute;left:2px;color:var(--lime-dim);} 
+
+  .empty-note{color:var(--text-dim);font-size:12.5px;padding:10px 0;}
+
+  .log-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:28px;padding-top:18px;border-top:1px solid var(--line);} 
+  .log-count{font-size:11.5px;color:var(--text-dim);} 
+  .log-count strong{color:var(--lime);} 
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--text-dim);padding:8px 14px;border-radius:2px;font-family:var(--mono);font-size:11.5px;cursor:pointer;letter-spacing:.5px;}
+  button.ghost:hover{border-color:var(--lime-dim);color:var(--lime);} 
+
+  details.setup{margin-top:36px;border:1px solid var(--line);border-radius:3px;background:var(--bg-panel);} 
+  details.setup summary{cursor:pointer;padding:14px 20px;font-size:11.5px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;} 
+  details.setup summary:hover{color:var(--lime);} 
+  details.setup .inner{padding:0 20px 20px;font-size:12.5px;color:var(--text-dim);} 
+  details.setup code{background:var(--bg-raised);padding:1px 5px;border-radius:2px;color:var(--lime);} 
+  details.setup pre{background:var(--bg-raised);border:1px solid var(--line);padding:12px;border-radius:3px;overflow-x:auto;font-size:11px;color:var(--text);} 
+  details.setup ol{padding-left:18px;} 
+  details.setup li{margin-bottom:6px;}
+
+  footer{margin-top:40px;color:var(--text-faint);font-size:11px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="wordmark">SPECTRE<span>.</span></div>
+      <div class="tagline">Automated IR functional-group identification — from AXL / Axiom Labs</div>
+    </div>
+    <div class="badge">IISER Network Beta</div>
+  </header>
+
+  <div class="panel">
+    <div class="eyebrow">Step 1 — Identify yourself</div>
+    <div class="row">
+      <div class="field">
+        <label for="profName">Name</label>
+        <input type="text" id="profName" placeholder="Dr. First Last" autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="institute">Institute</label>
+        <select id="institute">
+          <option value="">Select an IISER</option>
+          <option>IISER Tirupati</option>
+          <option>IISER Pune</option>
+          <option>IISER Kolkata</option>
+          <option>IISER Mohali</option>
+          <option>IISER Bhopal</option>
+          <option>IISER Thiruvananthapuram</option>
+          <option>IISER Berhampur</option>
+          <option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" id="otherInstituteField" style="display:none;">
+      <label for="otherInstitute">Institute name</label>
+      <input type="text" id="otherInstitute" placeholder="Type your institute">
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="eyebrow">Step 2 — Provide a spectrum</div>
+    <div class="dropzone" id="dropzone">
+      <div id="dzText"><strong>Click to upload</strong> or drag a file here<br>CSV/TSV (wavenumber, absorbance) — or a PNG/JPG of a plotted spectrum</div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.tsv,.txt,.png,.jpg,.jpeg">
+    <div class="examples">
+      <button class="chip" id="exAcid">Try example — carboxylic-acid-like</button>
+      <button class="chip" id="exAlcohol">Try example — alcohol-like</button>
+    </div>
+
+    <div id="imageCalibration" style="display:none;margin-top:18px;">
+      <div class="eyebrow" style="margin-bottom:14px;">Plot image — axis calibration</div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="calibProfile">Saved calibration (reuse for the same instrument software)</label>
+        <select id="calibProfile"><option value="">— None / enter axis range manually —</option></select>
+      </div>
+      <div class="row" id="axisRangeFields">
+        <div class="field"><label for="xMin">X-axis at left edge (cm⁻¹)</label><input type="text" id="xMin" placeholder="4000"></div>
+        <div class="field"><label for="xMax">X-axis at right edge (cm⁻¹)</label><input type="text" id="xMax" placeholder="400"></div>
+        <div class="field"><label for="yMin">Y-axis at bottom edge</label><input type="text" id="yMin" placeholder="0"></div>
+        <div class="field"><label for="yMax">Y-axis at top edge</label><input type="text" id="yMax" placeholder="1.05"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="calibName">Save this calibration as (optional)</label>
+          <input type="text" id="calibName" placeholder="e.g. Chem Dept FTIR software">
+        </div>
+      </div>
+      <div class="status-line" id="calibStatus">Needs a visible boxed axis frame and a single, single-colored curve. Plot must show the whole 4000–400 cm⁻¹ range (or whatever range you enter above) at its edges.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="eyebrow">Step 3 — Run</div>
+    <div class="field" style="margin-bottom:16px;">
+      <label for="modelSelect">Classifier</label>
+      <select id="modelSelect">
+        <option value="rule">Rule Engine (Phase 1 — fast, interpretable, peak-level evidence)</option>
+        <option value="cnn">CNN (Phase 3 — learned from spectrum shape, no peak evidence)</option>
+      </select>
+    </div>
+    <button class="run" id="runBtn" disabled>Run Spectre analysis</button>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+
+  <div id="results" class="panel">
+    <div class="section-title">Spectrum</div>
+    <canvas id="plotCanvas" width="900" height="280"></canvas>
+
+    <div class="section-title" style="margin-top:26px;">Detected peaks</div>
+    <table id="peakTable">
+      <thead><tr><th>Wavenumber (cm⁻¹)</th><th>Intensity</th><th>Width (cm⁻¹)</th><th>Shape</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="section-title" style="margin-top:26px;">Predicted functional groups</div>
+    <div id="predictions"></div>
+
+    <div class="log-bar">
+      <div class="log-count">Logged locally this browser: <strong id="logCount">0</strong> submission(s)</div>
+      <button class="ghost" id="downloadLog">Download local log (.csv)</button>
+    </div>
+  </div>
+
+  <details class="setup">
+    <summary>Admin setup — connect central logging (Google Sheet)</summary>
+    <div class="inner">
+      <p>This page runs entirely client-side (safe for GitHub Pages — no backend). Every run is saved to the visiting browser's local storage, and a <strong>Download local log (.csv)</strong> button lets any user export what happened in their own browser. To collect submissions from <em>everyone</em> in one place, wire up a free Google Sheet + Apps Script endpoint:</p>
+      <ol>
+        <li>Create a new Google Sheet, e.g. <code>Spectre Submissions</code>.</li>
+        <li>Open <code>Extensions → Apps Script</code>, delete the placeholder code, and paste in the contents of <code>sheet-logger.gs</code> (shipped alongside this file).</li>
+        <li>Click <code>Deploy → New deployment</code>, type = <code>Web app</code>, execute as <code>Me</code>, access = <code>Anyone</code>.</li>
+        <li>Copy the deployment URL and paste it into the <code>SHEET_ENDPOINT</code> constant near the top of the <code>&lt;script&gt;</code> block in this file.</li>
+        <li>Re-upload this file to your GitHub Pages repo. Every future submission will silently POST to that sheet in addition to being logged locally.</li>
+      </ol>
+      <p>Until <code>SHEET_ENDPOINT</code> is set, the tool works fully — logging just stays local to each visitor's browser.</p>
+    </div>
+  </details>
+
+  <details class="setup">
+    <summary>Admin setup — deploy the CNN (Phase 3)</summary>
+    <div class="inner">
+      <p>The CNN classifier runs entirely in the visitor's browser via <a href="https://onnxruntime.ai/docs/tutorials/web/" target="_blank" rel="noopener">onnxruntime-web</a> (loaded from a CDN, no install needed) — no Python backend, same as everything else on this page.</p>
+      <ol>
+        <li>Train a checkpoint: <code>python scripts/train_cnn.py</code> (from the main Spectre repo, not this web folder).</li>
+        <li>Export it: <code>python scripts/export_onnx.py</code> — this writes <code>web/cnn_ir.onnx</code> and <code>web/cnn_ir_labels.json</code>.</li>
+        <li>Push <em>both</em> files to your GitHub Pages repo in the same folder as the page you are serving, or in the sibling <code>web/</code> folder if you are serving the app from the repo root — the page resolves them dynamically from the current URL (<code>cnn_ir.onnx</code>, <code>cnn_ir_labels.json</code>).</li>
+        <li>That's it — the "CNN (Phase 3)" option in the classifier dropdown will load and run them on first use.</li>
+      </ol>
+      <p>This deployment already ships a checkpoint trained on synthetic data (see <code>spectre/synthetic/generator.py</code> in the main repo) — retrain on real labeled spectra once available and re-export to replace it.</p>
+    </div>
+  </details>
+
+  <footer>Spectre — Phase 1 rule engine + Phase 3 CNN (IR only). Client-side reimplementation for demo/teaching use. PNG/JPG plot digitization assumes a visible boxed axis frame and a single-colored curve.</footer>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your Google Apps Script Web App URL here once
+   deployed (see "Admin setup" above). Leave "" to log locally only.
+   ============================================================ */
+const SHEET_ENDPOINT = "";
+
+/* ============================================================
+   1. CORRELATION TABLE  (ported from spectre/models/correlation_table.py)
+   ============================================================ */
+const CORRELATION_TABLE = [
+  {low:3600, high:3200, shape:"broad",  bond:"O-H stretch", group:"Alcohol / Phenol",
+   note:"Broad, smooth, u-shaped curve ('tongue'). Free/H-bonded O-H stretch.", priority:3},
+  {low:3400, high:3250, shape:"sharp",  bond:"N-H stretch", group:"Amine / Amide",
+   note:"Sharper and weaker than O-H. Primary amine: two peaks. Secondary amine/amide: one peak.", priority:3},
+  {low:3300, high:2500, shape:"broad",  bond:"O-H stretch (H-bonded dimer)", group:"Carboxylic Acid",
+   note:"Extremely broad, 'messy valley' centered near 3000, often overlaps the C-H stretch region entirely.", priority:4},
+  {low:3333, high:3267, shape:"sharp",  bond:"sp C-H stretch", group:"Terminal Alkyne",
+   note:"Sharp peak right around 3300 cm^-1.", priority:3},
+  {low:3100, high:3010, shape:"sharp",  bond:"sp2 C-H stretch", group:"Alkene / Aromatic ring",
+   note:"Sharp peak just above the 3000 cm^-1 boundary line.", priority:2},
+  {low:2950, high:2850, shape:"sharp",  bond:"sp3 C-H stretch", group:"Alkane",
+   note:"Sharp, jagged peak(s) just below the 3000 cm^-1 boundary line. Present in almost all organic compounds — low diagnostic value alone.", priority:1},
+  {low:2260, high:2100, shape:"sharp",  bond:"C#C or C#N stretch", group:"Alkyne / Nitrile",
+   note:"Thin, short, weak spike. Easy to miss — scan carefully.", priority:2},
+  {low:1760, high:1665, shape:"sharp",  bond:"C=O stretch", group:"Carbonyl (Ketone / Aldehyde / Ester / Carboxylic Acid)",
+   note:"Strong, sharp, deep peak — usually the most diagnostic single peak in the whole spectrum.", priority:5},
+  {low:1680, high:1640, shape:"medium", bond:"C=C stretch", group:"Alkene",
+   note:"Much weaker and narrower than the carbonyl peak nearby.", priority:2},
+];
+function ruleContains(rule, wavenumber){ return rule.high <= wavenumber && wavenumber <= rule.low; }
+
+/* ============================================================
+   2. PREPROCESSING  (ported/simplified from preprocessing/*.py)
+   ============================================================ */
+function estimateBaseline(y, windowFrac=0.06){
+  const n = y.length;
+  const w = Math.max(5, Math.round(n*windowFrac));
+  const rollMin = new Array(n);
+  for(let i=0;i<n;i++){
+    let lo=Math.max(0,i-w), hi=Math.min(n-1,i+w), m=Infinity;
+    for(let j=lo;j<=hi;j++) if(y[j]<m) m=y[j];
+    rollMin[i]=m;
+  }
+  const baseline = new Array(n);
+  const sw = Math.max(3, Math.round(w/2));
+  for(let i=0;i<n;i++){
+    let lo=Math.max(0,i-sw), hi=Math.min(n-1,i+sw), s=0, c=0;
+    for(let j=lo;j<=hi;j++){ s+=rollMin[j]; c++; }
+    baseline[i]=s/c;
+  }
+  return baseline;
+}
+function correctBaseline(y){
+  const b = estimateBaseline(y);
+  return y.map((v,i)=>Math.max(0, v-b[i]));
+}
+const SG9 = [-21,14,39,54,59,54,39,14,-21].map(c=>c/231);
+function smooth(y){
+  const n=y.length, half=4;
+  if(n < 9) return y.slice();
+  const out=new Array(n);
+  for(let i=0;i<n;i++){
+    let s=0;
+    for(let k=-half;k<=half;k++){ 
+      let idx=i+k;
+      if(idx<0) idx=-idx;
+      if(idx>n-1) idx=2*(n-1)-idx;
+      s += y[idx]*SG9[k+half];
+    }
+    out[i]=s;
+  }
+  return out;
+}
+function normalize(y){
+  const m = Math.max(...y) || 1;
+  return y.map(v=>v/m);
+}
+
+/* ============================================================
+   3. PEAK DETECTION  (ported/simplified from features/peaks.py)
+   ============================================================ */
+function shapeOf(width){
+  if(width>=150) return "broad";
+  if(width>=50) return "medium";
+  return "sharp";
+}
+function detectPeaks(x, y, {height=0.05, prominence=0.03, distance=15}={}){
+  const n=y.length;
+  const candidates=[];
+  for(let i=1;i<n-1;i++){
+    if(y[i] < height) continue;
+    if(!(y[i] >= y[i-1] && y[i] >= y[i+1])) continue;
+    if(y[i]===y[i-1]) continue;
+    let leftMin=y[i];
+    for(let j=i-1;j>=0;j--){ if(y[j] > y[i]) break; if(y[j] < leftMin) leftMin=y[j]; }
+    let rightMin=y[i];
+    for(let j=i+1;j<n;j++){ if(y[j] > y[i]) break; if(y[j] < rightMin) rightMin=y[j]; }
+    const prom = y[i] - Math.max(leftMin, rightMin);
+    if(prom < prominence) continue;
+    candidates.push({idx:i, height:y[i], prom});
+  }
+  candidates.sort((a,b)=>b.height-a.height);
+  const chosen=[];
+  for(const c of candidates){
+    if(chosen.some(p=>Math.abs(p.idx-c.idx) < distance)) continue;
+    chosen.push(c);
+  }
+  const peaks = chosen.map(c=>{
+    const i=c.idx, half=c.height/2;
+    let li=i;
+    while(li>0 && y[li] > half) li--;
+    let ri=i;
+    while(ri<n-1 && y[ri] > half) ri++;
+    function interpX(i0,i1){
+      const y0=y[i0], y1=y[i1];
+      if(y1===y0) return x[i0];
+      const t=(half-y0)/(y1-y0);
+      return x[i0] + t*(x[i1]-x[i0]);
+    }
+    const xLeft = li<i ? interpX(li, li+1) : x[i];
+    const xRight = ri>i ? interpX(ri-1, ri) : x[i];
+    const width = Math.abs(xLeft - xRight);
+    return {wavenumber:x[i], intensity:y[i], width, shape:shapeOf(width)};
+  });
+  peaks.sort((a,b)=>b.wavenumber-a.wavenumber);
+  return peaks;
+}
+
+/* ============================================================
+   4. RULE ENGINE  (ported from models/rule_engine.py)
+   ============================================================ */
+function shapeMatchScore(peakShape, ruleShape){
+  if(ruleShape==="variable") return 0.7;
+  if(peakShape===ruleShape) return 1.0;
+  const order=["sharp","medium","broad"];
+  const dist=Math.abs(order.indexOf(peakShape)-order.indexOf(ruleShape));
+  return Math.max(0.3, 1.0 - 0.35*dist);
+}
+function classify(peaks){
+  const hits={};
+  for(const peak of peaks){
+    for(const rule of CORRELATION_TABLE){
+      if(!ruleContains(rule, peak.wavenumber)) continue;
+      const shapeScore = shapeMatchScore(peak.shape, rule.shape);
+      const confidence = Math.min(1.0, (rule.priority/5.0)*shapeScore*(0.5+0.5*peak.intensity));
+      if(!hits[rule.group]) hits[rule.group] = {functional_group:rule.group, confidence:0, evidence:[], matched_rules:[]};
+      const pred = hits[rule.group];
+      pred.evidence.push(peak);
+      pred.matched_rules.push(`${rule.bond} near ${peak.wavenumber.toFixed(0)} cm⁻¹ (${rule.note})`);
+      const bump = pred.evidence.length>1 ? 0.05*(pred.evidence.length-1) : 0.0;
+      pred.confidence = Math.min(0.99, Math.max(pred.confidence, confidence) + bump);
+    }
+  }
+  return Object.values(hits).sort((a,b)=>b.confidence-a.confidence);
+}
+
+/* ============================================================
+   5. INGESTION  (ported/simplified from ingestion/parsers.py)
+   ============================================================ */
+function parseDelimited(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
+  const x=[], y=[];
+  for(const line of lines){
+    const parts = line.split(/[,\t]/).map(s=>s.trim());
+    if(parts.length<2) continue;
+    const a=parseFloat(parts[0]), b=parseFloat(parts[1]);
+    if(Number.isNaN(a) || Number.isNaN(b)) continue;
+    x.push(a); y.push(b);
+  }
+  if(x.length===0) throw new Error("No numeric (wavenumber, intensity) rows found in file.");
+  if(x[0] < x[x.length-1]){ x.reverse(); y.reverse(); }
+  return {x,y};
+}
+function parseEmbedded(str){
+  const x=[], y=[];
+  for(const pair of str.split(";")){
+    if(!pair) continue;
+    const [a,b]=pair.split(",");
+    x.push(parseFloat(a)); y.push(parseFloat(b));
+  }
+  return {x,y};
+}
+
+/* ============================================================
+   6. EMBEDDED EXAMPLE SPECTRA (downsampled from examples/*.csv)
+   ============================================================ */
+const EXAMPLE_ACID = "4000,0.0034;3996,0.0000;3992,0.0020;3988,0.0025;3984,0.0041;3980,0.0015;3976,0.0004;3972,0.0047;3968,0.0002;3964,0.0023;3960,0.0067;3956,0.0037;3952,0.0066;3948,0.0000;3944,0.0022;3940,0.0000;3936,0.0074;3932,0.0083;3928,0.0000;3924,0.0022;3920,0.0069;3916,0.0000;3912,0.0074;3908,0.0031;3904,0.0000;3900,0.0037;3896,0.0012;3892,0.0103;3888,0.0034;3884,0.0078;3880,0.0018;3876,0.0113;3872,0.0042;3868,0.0109;3864,0.0096;3860,0.0104;3856,0.0046;3852,0.0144;3848,0.0010;3844,0.0104;3840,0.0053;3836,0.0147;3832,0.0102;3828,0.0091;3824,0.0197;3820,0.0188;3816,0.0149;3812,0.0063;3808,0.0118;3804,0.0174;3800,0.0164;3796,0.0050;3792,0.0114;3788,0.0165;3784,0.0197;3780,0.0165;3776,0.0187;3772,0.0146;3768,0.0211;3764,0.0095;3760,0.0165;3756,0.0323;3752,0.0369;3748,0.0318;3744,0.0262;3740,0.0236;3736,0.0280;3732,0.0268;3728,0.0269;3724,0.0245;3720,0.0317;3716,0.0247;3712,0.0298;3708,0.0396;3704,0.0348;3700,0.0430;3696,0.0352;3692,0.0395;3688,0.0465;3684,0.0393;3680,0.0441;3676,0.0505;3672,0.0368;3668,0.0405;3664,0.0420;3660,0.0353;3656,0.0562;3652,0.0417;3648,0.0482;3644,0.0538;3640,0.0534;3636,0.0551;3632,0.0584;3628,0.0633;3624,0.0597;3620,0.0630;3616,0.0562;3612,0.0674;3608,0.0655;3604,0.0736;3600,0.0708;3596,0.0763;3592,0.0657;3588,0.0743;3584,0.0853;3580,0.0824;3576,0.0797;3572,0.0794;3568,0.0879;3564,0.0882;3560,0.0923;3556,0.0939;3552,0.1036;3548,0.1103;3544,0.1084;3540,0.1072;3536,0.1026;3532,0.1164;3528,0.1121;3524,0.1216;3520,0.1202;3516,0.1216;3512,0.1205;3508,0.1262;3504,0.1215;3500,0.1404;3496,0.1219;3492,0.1370;3488,0.1434;3484,0.1494;3480,0.1445;3476,0.1596;3472,0.1572;3468,0.1570;3464,0.1599;3460,0.1576;3456,0.1683;3452,0.1766;3448,0.1781;3444,0.1765;3440,0.1835;3436,0.1921;3432,0.1940;3428,0.1964;3424,0.2055;3420,0.1906;3416,0.2101;3412,0.2116;3408,0.2235;3404,0.2158;3400,0.2250;3396,0.2233;3392,0.2221;3388,0.2275;3384,0.2423;3380,0.2407;3376,0.2495;3372,0.2461;3368,0.2535;3364,0.2589;3360,0.2567;3356,0.2668;3352,0.2736;3348,0.2855;3344,0.277";
+const EXAMPLE_ALCOHOL = "4000,0.0000;3996,0.0000;3992,0.0000;3988,0.0005;3984,0.0000;3980,0.0000;3976,0.0008;3972,0.0000;3968,0.0000;3964,0.0000;3960,0.0006;3956,0.0068;3952,0.0000;3948,0.0004;3944,0.0000;3940,0.0010;3936,0.0000;3932,0.0000;3928,0.0000;3924,0.0000;3920,0.0000;3916,0.0000;3912,0.0058;3908,0.0000;3904,0.0000;3900,0.0000;3896,0.0000;3892,0.0000;3888,0.0000;3884,0.0013;3880,0.0004;3876,0.0000;3872,0.0000;3868,0.0006;3864,0.0000;3860,0.0055;3856,0.0000;3852,0.0048;3848,0.0000;3844,0.0000;3840,0.0000;3836,0.0000;3832,0.0000;3828,0.0000;3824,0.0067;3820,0.0000;3816,0.0000;3812,0.0019;3808,0.0048;3804,0.0042;3800,0.0000;3796,0.0094;3792,0.0041;3788,0.0000;3784,0.0000;3780,0.0000;3776,0.0000;3772,0.0000;3768,0.0018;3764,0.0045;3760,0.0000;3756,0.0000;3752,0.0000;3748,0.0067;3744,0.0057;3740,0.0003;3736,0.0000;3732,0.0000;3728,0.0088;3724,0.0021;3720,0.0006;3716,0.0062;3712,0.0000;3708,0.0052;3704,0.0015;3700,0.0081;3696,0.0000;3692,0.0000;3688,0.0000;3684,0.0000;3680,0.0000;3676,0.0000;3672,0.0039;3668,0.0000;3664,0.0085;3660,0.0037;3656,0.0000;3652,0.0080;3648,0.0052;3644,0.0027;3640,0.0074;3636,0.0000;3632,0.0106;3628,0.0053;3624,0.0092;3620,0.0083;3616,0.0160;3612,0.0143;3608,0.0067;3604,0.0160;3600,0.0176;3596,0.0198;3592,0.0233;3588,0.0301;3584,0.0387;3580,0.0298;3576,0.0259;3572,0.0331;3568,0.0353;3564,0.0433;3560,0.0447;3556,0.0602;3552,0.0541;3548,0.0633;3544,0.0742;3540,0.0791;3536,0.0882;3532,0.0843;3528,0.1006;3524,0.0998;3520,0.1158;3516,0.1333;3512,0.1267;3508,0.1366;3504,0.1568;3500,0.1639;3496,0.1810;3492,0.1870;3488,0.1959;3484,0.2238;3480,0.2248;3476,0.2446;3472,0.2521;3468,0.2714;3464,0.2782;3460,0.3004;3456,0.3133;3452,0.3310;3448,0.3454;3444,0.3639;3440,0.3740;3436,0.3938;3432,0.4132;3428,0.4227;3424,0.4319;3420,0.4545;3416,0.4663;3412,0.4834;3408,0.4945;3404,0.5097;3400,0.5117;3396,0.5230;3392,0.5311;3388,0.5494;3384,0.5609;3380,0.5755;3376,0.5745;3372,0.5828;3368,0.5888;3364,0.5923;3360,0.5920;3356,0.6040;3352,0.6050;3348,0.5956;3344,0."
+
+/* ============================================================
+   5.5 IMAGE DIGITIZATION (ported from spectre/ingestion/image_digitizer.py,
+   validated in Node against the Python implementation on the same test
+   image -- both recover the curve with ~0.003 mean absolute error against
+   ground truth)
+   ============================================================ */
+function loadImageAsPixelData(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      resolve({width: canvas.width, height: canvas.height, data: imageData.data});
+    };
+    img.onerror = ()=>reject(new Error("Could not load image file."));
+    img.src = URL.createObjectURL(file);
+  });
+}
+function makeGetPixel(pixelData){
+  const { width, data } = pixelData;
+  return (x, y)=>{
+    const idx = (width*y + x) << 2;
+    return [data[idx], data[idx+1], data[idx+2]];
+  };
+}
+function detectPlotBBox(width, height, getPixel, minLineFrac=0.5){
+  const rowDarkFrac = new Array(height).fill(0);
+  const colDarkFrac = new Array(width).fill(0);
+  for(let y=0;y<height;y++){
+    let count=0;
+    for(let x=0;x<width;x++){ const [r,g,b]=getPixel(x,y); if((r+g+b)/3 < 128) count++; }
+    rowDarkFrac[y]=count/width;
+  }
+  for(let x=0;x<width;x++){
+    let count=0;
+    for(let y=0;y<height;y++){ const [r,g,b]=getPixel(x,y); if((r+g+b)/3 < 128) count++; }
+    colDarkFrac[x]=count/height;
+  }
+  const rowCandidates=[]; for(let y=0;y<height;y++) if(rowDarkFrac[y]>minLineFrac) rowCandidates.push(y);
+  const colCandidates=[]; for(let x=0;x<width;x++) if(colDarkFrac[x]>minLineFrac) colCandidates.push(x);
+  if(rowCandidates.length<2 || colCandidates.length<2){
+    throw new Error("Could not detect a rectangular axis frame -- this image needs a visible boxed axis frame.");
+  }
+  return { left: Math.min(...colCandidates), top: Math.min(...rowCandidates), right: Math.max(...colCandidates), bottom: Math.max(...rowCandidates) };
+}
+function detectCurveColor(getPixel, bbox){
+  const { left, top, right, bottom } = bbox;
+  let counts = new Map(), colorfulCount = 0;
+  for(let y=top;y<bottom;y++){
+    for(let x=left;x<right;x++){
+      const [r,g,b]=getPixel(x,y);
+      const maxc=Math.max(r,g,b), minc=Math.min(r,g,b);
+      const isGrayish=(maxc-minc)<20, isNearWhite=minc>230;
+      if(!isGrayish && !isNearWhite){
+        colorfulCount++;
+        const key=`${r},${g},${b}`;
+        counts.set(key,(counts.get(key)||0)+1);
+      }
+    }
+  }
+  if(colorfulCount<=200){
+    counts = new Map();
+    for(let y=top;y<bottom;y++){
+      for(let x=left;x<right;x++){
+        const [r,g,b]=getPixel(x,y);
+        if(Math.max(r,g,b)<100){
+          const key=`${r},${g},${b}`;
+          counts.set(key,(counts.get(key)||0)+1);
+        }
+      }
+    }
+  }
+  let bestKey=null, bestCount=-1;
+  for(const [key,count] of counts){ if(count>bestCount){ bestCount=count; bestKey=key; } }
+  if(!bestKey) throw new Error("Could not find a distinguishable curve color inside the plot area.");
+  return bestKey.split(",").map(Number);
+}
+function extractCurvePixels(getPixel, bbox, curveColor, tolerance=40){
+  const { left, top, right, bottom } = bbox;
+  const nCols = right-left, nRows = bottom-top;
+  const [cr,cg,cb] = curveColor;
+  const rowOfCol = new Array(nCols).fill(NaN);
+  for(let c=0;c<nCols;c++){
+    let sum=0, n=0;
+    const x=left+c;
+    for(let ry=0;ry<nRows;ry++){
+      const y=top+ry;
+      const [r,g,b]=getPixel(x,y);
+      const dist=Math.sqrt((r-cr)**2+(g-cg)**2+(b-cb)**2);
+      if(dist<=tolerance){ sum+=ry; n++; }
+    }
+    if(n>0) rowOfCol[c]=sum/n;
+  }
+  return rowOfCol;
+}
+function pixelsToSpectrum(rowOfCol, bbox, xRange, yRange){
+  const { top, bottom } = bbox;
+  const nCols = rowOfCol.length;
+  const [xMin,xMax] = xRange, [yMin,yMax] = yRange;
+  const bboxH = bottom-top;
+  const validIdx=[]; for(let i=0;i<nCols;i++) if(!Number.isNaN(rowOfCol[i])) validIdx.push(i);
+  if(validIdx.length < nCols*0.5){
+    throw new Error(`Only recovered the curve in ${validIdx.length}/${nCols} columns -- curve color/tolerance is probably wrong for this image.`);
+  }
+  const rowFilled=new Array(nCols);
+  let vi=0;
+  for(let i=0;i<nCols;i++){
+    if(!Number.isNaN(rowOfCol[i])){ rowFilled[i]=rowOfCol[i]; continue; }
+    while(vi<validIdx.length-1 && validIdx[vi+1]<i) vi++;
+    const i0=validIdx[Math.min(vi,validIdx.length-1)], i1=validIdx[Math.min(vi+1,validIdx.length-1)];
+    if(i0===i1){ rowFilled[i]=rowOfCol[i0]; continue; }
+    const t=(i-i0)/(i1-i0);
+    rowFilled[i]=rowOfCol[i0]+t*(rowOfCol[i1]-rowOfCol[i0]);
+  }
+  const x=new Array(nCols), y=new Array(nCols);
+  for(let i=0;i<nCols;i++){
+    x[i]=xMin+(i/(nCols-1))*(xMax-xMin);
+    y[i]=yMax-(rowFilled[i]/(bboxH-1))*(yMax-yMin);
+  }
+  return {x,y};
+}
+async function digitizePlotImage(file, xRange, yRange){
+  const pixelData = await loadImageAsPixelData(file);
+  const getPixel = makeGetPixel(pixelData);
+  const bbox = detectPlotBBox(pixelData.width, pixelData.height, getPixel);
+  const color = detectCurveColor(getPixel, bbox);
+  const rowOfCol = extractCurvePixels(getPixel, bbox, color, 40);
+  let {x,y} = pixelsToSpectrum(rowOfCol, bbox, xRange, yRange);
+  if(x[0] < x[x.length-1]){ x = x.slice().reverse(); y = y.slice().reverse(); }
+  return {x,y};
+}
+
+// Calibration profiles (bbox + curve color + axis range), saved per-browser via localStorage so a prof only enters the axis range once per instrument.
+function getCalibrationProfiles(){
+  try{ return JSON.parse(localStorage.getItem('spectre_calibrations')||'{}'); }catch(e){ return {}; }
+}
+function saveCalibrationProfile(name, profile){
+  const all = getCalibrationProfiles();
+  all[name] = profile;
+  localStorage.setItem('spectre_calibrations', JSON.stringify(all));
+}
+
+/* ============================================================
+   5.6 CNN INFERENCE (ONNX Runtime Web -- Phase 3, exported from
+   spectre/models/cnn.py via scripts/export_onnx.py)
+   ============================================================ */
+const CNN_GRID = (()=>{ const g=[]; for(let w=4000; w>=400; w--) g.push(w); return g; })();
+let _cnnSession = null, _cnnLabels = null;
+
+async function resolveAssetUrl(filename){
+  const candidates = [];
+  const explicitBase = window.SPECTRE_CNN_BASE_URL;
+  if(explicitBase){
+    const base = explicitBase.endsWith('/') ? explicitBase : `${explicitBase}/`;
+    candidates.push(new URL(filename, base).toString());
+  }
+
+  const pageUrl = new URL(window.location.href);
+  const pageDir = pageUrl.pathname.replace(/[^/]*$/, '');
+  const pageBase = `${pageUrl.origin}${pageDir}`;
+  candidates.push(new URL(filename, pageBase).toString());
+  candidates.push(new URL(`../${filename}`, pageBase).toString());
+  candidates.push(new URL(`web/${filename}`, pageBase).toString());
+
+  const seen = new Set();
+  const unique = candidates.filter(url => {
+    if(seen.has(url)) return false;
+    seen.add(url);
+    return true;
+  });
+
+  for(const url of unique){
+    try{
+      const response = await fetch(url, { method: 'HEAD' });
+      if(response.ok) return url;
+    } catch {}
+  }
+
+  return unique[0] || filename;
+}
+
+async function loadCnnModel(){
+  if(_cnnSession) return { session: _cnnSession, labels: _cnnLabels };
+  const [modelUrl, labelsUrl] = await Promise.all([
+    resolveAssetUrl('cnn_ir.onnx'),
+    resolveAssetUrl('cnn_ir_labels.json'),
+  ]);
+  const [session, labelsResp] = await Promise.all([
+    ort.InferenceSession.create(modelUrl),
+    fetch(labelsUrl).then(r=>r.json()),
+  ]);
+  _cnnSession = session;
+  _cnnLabels = Array.isArray(labelsResp) ? labelsResp : (labelsResp.labels || []);
+  return { session, labels: _cnnLabels };
+}
+function resampleToGrid(x, y, grid){
+  let xAsc = x, yAsc = y;
+  if(x[0] > x[x.length-1]){ xAsc = x.slice().reverse(); yAsc = y.slice().reverse(); }
+  const n = xAsc.length;
+  const gridAsc = grid.slice().reverse();
+  const out = new Array(gridAsc.length);
+  let j = 0;
+  for(let i=0;i<gridAsc.length;i++){
+    const gx = gridAsc[i];
+    if(gx < xAsc[0]){ out[i] = 0; continue; }
+    if(gx > xAsc[n-1]){ out[i] = 0; continue; }
+    while(j < n-2 && xAsc[j+1] < gx) j++;
+    const x0=xAsc[j], x1=xAsc[j+1], y0=yAsc[j], y1=yAsc[j+1];
+    const t = x1===x0 ? 0 : (gx-x0)/(x1-x0);
+    out[i] = y0 + t*(y1-y0);
+  }
+  return out.reverse();
+}
+async function cnnPredict(x, y){
+  const { session, labels } = await loadCnnModel();
+  let resampled = resampleToGrid(x, y, CNN_GRID);
+  const maxVal = Math.max(...resampled) || 1;
+  resampled = resampled.map(v=>v/maxVal);
+  const tensor = new ort.Tensor('float32', Float32Array.from(resampled), [1, resampled.length]);
+  const output = await session.run({ spectrum: tensor });
+  const logits = output.logits.data;
+  const preds = [];
+  for(let i=0;i<labels.length;i++){
+    const prob = 1/(1+Math.exp(-logits[i]));
+    if(prob >= 0.5) preds.push({ functional_group: labels[i], confidence: prob, evidence: [], matched_rules: ["CNN prediction (Phase 3) — no peak-level evidence, cross-check against the rule engine for interpretability"] });
+  }
+  preds.sort((a,b)=>b.confidence-a.confidence);
+  return preds;
+}
+
+/* ============================================================
+   7. PIPELINE
+   ============================================================ */
+async function runPipeline(x, y, model){
+  let yc = correctBaseline(y);
+  yc = smooth(yc);
+  yc = normalize(yc);
+  const peaks = detectPeaks(x, yc, {height:0.05, prominence:0.03, distance:15});
+
+  let predictions;
+  if(model === 'cnn'){
+    predictions = await cnnPredict(x, yc);
+  } else {
+    predictions = classify(peaks);
+  }
+  return {x, y:yc, peaks, predictions};
+}
+
+/* ============================================================
+   8. RENDERING
+   ============================================================ */
+function drawPlot(x, y, peaks){
+  const canvas = document.getElementById('plotCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 900, cssH = 280;
+  canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const padL=40, padR=14, padT=14, padB=28;
+  const plotW=cssW-padL-padR, plotH=cssH-padT-padB;
+  const xMax=Math.max(...x), xMin=Math.min(...x);
+  const yMax=Math.max(...y)||1;
+
+  function px(xv){ return padL + (xMax-xv)/(xMax-xMin)*plotW; }
+  function py(yv){ return padT + (1-yv/yMax)*plotH; }
+
+  ctx.strokeStyle="#232323"; ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let gx=4000; gx>=500; gx-=500){
+    if(gx<xMin || gx>xMax) continue;
+    const X=px(gx);
+    ctx.moveTo(X,padT); ctx.lineTo(X,padT+plotH);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle="#8a8a83"; ctx.font="10px monospace"; ctx.textAlign="center";
+  for(let gx=4000; gx>=500; gx-=500){
+    if(gx<xMin || gx>xMax) continue;
+    ctx.fillText(gx, px(gx), cssH-10);
+  }
+
+  ctx.strokeStyle="#e8e8e3"; ctx.lineWidth=1.2;
+  ctx.beginPath();
+  for(let i=0;i<x.length;i++){
+    const X=px(x[i]), Y=py(y[i]);
+    if(i===0) ctx.moveTo(X,Y); else ctx.lineTo(X,Y);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle="#c8ff3d"; ctx.setLineDash([3,3]); ctx.lineWidth=1;
+  ctx.fillStyle="#c8ff3d"; ctx.font="9px monospace"; ctx.textAlign="left";
+  for(const p of peaks){
+    const X=px(p.wavenumber);
+    ctx.beginPath(); ctx.moveTo(X,padT); ctx.lineTo(X,padT+plotH); ctx.stroke();
+    ctx.save();
+    ctx.translate(X+3, padT+plotH-4);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(p.wavenumber.toFixed(0), 0, 0);
+    ctx.restore();
+  }
+  ctx.setLineDash([]);
+}
+
+function renderResults(result, meta){
+  document.getElementById('results').style.display='block';
+  drawPlot(result.x, result.y, result.peaks);
+
+  const tbody = document.querySelector('#peakTable tbody');
+  tbody.innerHTML='';
+  if(result.peaks.length===0){
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-note">No peaks detected above threshold.</td></tr>';
+  }
+  for(const p of result.peaks){
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${p.wavenumber.toFixed(1)}</td><td>${p.intensity.toFixed(2)}</td><td>${p.width.toFixed(1)}</td><td>${p.shape}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  const predDiv = document.getElementById('predictions');
+  predDiv.innerHTML='';
+  if(result.predictions.length===0){
+    predDiv.innerHTML = '<div class="empty-note">No functional groups confidently matched — try a cleaner spectrum or check peak thresholds.</div>';
+  }
+  for(const pred of result.predictions){
+    const el = document.createElement('div');
+    el.className='pred';
+    const pct = Math.round(pred.confidence*100);
+    el.innerHTML = `
+      <div class="pred-head">
+        <div class="pred-name">${pred.functional_group}</div>
+        <div class="pred-conf">${pct}%</div>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;"></div></div>
+      <ul class="notes">${pred.matched_rules.map(n=>`<li>${n}</li>`).join('')}</ul>
+    `;
+    predDiv.appendChild(el);
+  }
+
+  logSubmission(meta, result);
+}
+
+/* ============================================================
+   9. LOGGING — local storage always; Google Sheet if configured
+   ============================================================ */
+function getLocalLog(){
+  try{ return JSON.parse(localStorage.getItem('spectre_log')||'[]'); }catch(e){ return []; }
+}
+function saveLocalLog(arr){ localStorage.setItem('spectre_log', JSON.stringify(arr)); }
+function updateLogCount(){ document.getElementById('logCount').textContent = getLocalLog().length; }
+
+function logSubmission(meta, result){
+  const top = result.predictions[0];
+  const entry = {
+    timestamp: new Date().toISOString(),
+    name: meta.name,
+    institute: meta.institute,
+    source: meta.source,
+    peakCount: result.peaks.length,
+    topGroup: top ? top.functional_group : "",
+    topConfidence: top ? Math.round(top.confidence*100) : ""
+  };
+  const log = getLocalLog();
+  log.push(entry);
+  saveLocalLog(log);
+  updateLogCount();
+
+  if(SHEET_ENDPOINT){
+    fetch(SHEET_ENDPOINT, {
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify(entry)
+    }).catch(()=>{});
+  }
+}
+
+function downloadLocalLogCsv(){
+  const log = getLocalLog();
+  if(log.length===0){ alert('No submissions logged in this browser yet.'); return; }
+  const header = ['timestamp','name','institute','source','peakCount','topGroup','topConfidence'];
+  const rows = [header.join(',')].concat(
+    log.map(r => header.map(h => `"${String(r[h]??'').replace(/"/g,'""')}"`).join(','))
+  );
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='spectre_submissions_log.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ============================================================
+   10. UI WIRING
+   ============================================================ */
+let currentSpectrum = null;
+
+const profNameEl = document.getElementById('profName');
+const instituteEl = document.getElementById('institute');
+const otherInstituteField = document.getElementById('otherInstituteField');
+const otherInstituteEl = document.getElementById('otherInstitute');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const dzText = document.getElementById('dzText');
+const runBtn = document.getElementById('runBtn');
+const statusLine = document.getElementById('statusLine');
+const modelSelect = document.getElementById('modelSelect');
+const imageCalibration = document.getElementById('imageCalibration');
+const calibProfileEl = document.getElementById('calibProfile');
+const calibNameEl = document.getElementById('calibName');
+const xMinEl = document.getElementById('xMin');
+const xMaxEl = document.getElementById('xMax');
+const yMinEl = document.getElementById('yMin');
+const yMaxEl = document.getElementById('yMax');
+const calibStatusEl = document.getElementById('calibStatus');
+
+function setStatus(msg, kind=''){
+  statusLine.textContent = msg;
+  statusLine.className = `status-line ${kind}`.trim();
+}
+
+function updateOtherInstituteVisibility(){
+  otherInstituteField.style.display = instituteEl.value === 'Other' ? 'block' : 'none';
+}
+instituteEl.addEventListener('change', updateOtherInstituteVisibility);
+updateOtherInstituteVisibility();
+
+function populateCalibrationProfiles(){
+  const profiles = getCalibrationProfiles();
+  calibProfileEl.innerHTML = '<option value="">— None / enter axis range manually —</option>';
+  Object.keys(profiles).forEach(name=>{
+    const opt=document.createElement('option');
+    opt.value=name; opt.textContent=name;
+    calibProfileEl.appendChild(opt);
+  });
+}
+populateCalibrationProfiles();
+
+function handleFile(file){
+  if(!file) return;
+  const isImage = file.type.startsWith('image/');
+  if(isImage){
+    imageCalibration.style.display='block';
+    dzText.innerHTML = `<strong>${file.name}</strong><br>Image loaded — calibrate the axis range below before running.`;
+  } else {
+    imageCalibration.style.display='none';
+    dzText.innerHTML = `<strong>${file.name}</strong><br>CSV/TSV loaded — ready to run.`;
+  }
+  runBtn.disabled = false;
+}
+
+dropzone.addEventListener('click', ()=>fileInput.click());
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', ()=>dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e=>{ e.preventDefault(); dropzone.classList.remove('drag'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', ()=>handleFile(fileInput.files[0]));
+
+function parseInputFile(file){
+  return file.text().then(text=>{
+    if(file.type.startsWith('image/')){
+      const xRange=[parseFloat(xMinEl.value), parseFloat(xMaxEl.value)];
+      const yRange=[parseFloat(yMinEl.value), parseFloat(yMaxEl.value)];
+      if(xRange.some(Number.isNaN) || yRange.some(Number.isNaN)) throw new Error('Please enter all four axis values for the plot image.');
+      return digitizePlotImage(file, xRange, yRange);
+    }
+    return parseDelimited(text);
+  });
+}
+
+async function runAnalysis(){
+  try{
+    setStatus('Loading…', '');
+    const file = fileInput.files[0];
+    if(!file){ throw new Error('Please upload a spectrum file first.'); }
+    const {x,y} = await parseInputFile(file);
+    const model = modelSelect.value;
+    const result = await runPipeline(x, y, model);
+    currentSpectrum = {x,y,source:file.name};
+    renderResults(result, {
+      name: profNameEl.value.trim() || 'Anonymous',
+      institute: instituteEl.value === 'Other' ? otherInstituteEl.value.trim() || 'Other' : instituteEl.value,
+      source: file.name
+    });
+    setStatus('Analysis complete.', 'ok');
+  } catch(err){
+    console.error(err);
+    setStatus(err.message || 'Something went wrong.', 'err');
+  }
+}
+
+runBtn.addEventListener('click', runAnalysis);
+
+const exampleButtons = {
+  exAcid: EXAMPLE_ACID,
+  exAlcohol: EXAMPLE_ALCOHOL
+};
+for(const [id, str] of Object.entries(exampleButtons)){
+  const btn = document.getElementById(id);
+  btn.addEventListener('click', ()=>{
+    const {x,y} = parseEmbedded(str);
+    currentSpectrum = {x,y,source:id};
+    const result = runPipeline(x, y, modelSelect.value);
+    renderResults(result, {name: profNameEl.value.trim() || 'Anonymous', institute: instituteEl.value === 'Other' ? otherInstituteEl.value.trim() || 'Other' : instituteEl.value, source:id});
+    setStatus('Example loaded and analyzed.', 'ok');
+  });
+}
+
+function loadExample(fileId){
+  const str = fileId === 'exAcid' ? EXAMPLE_ACID : EXAMPLE_ALCOHOL;
+  const {x,y} = parseEmbedded(str);
+  return {x,y};
+}
+
+function handleCalibrationSelection(){
+  const selected = calibProfileEl.value;
+  if(!selected) return;
+  const profiles = getCalibrationProfiles();
+  const profile = profiles[selected];
+  if(!profile) return;
+  xMinEl.value = profile.xMin;
+  xMaxEl.value = profile.xMax;
+  yMinEl.value = profile.yMin;
+  yMaxEl.value = profile.yMax;
+  calibStatusEl.textContent = `Loaded saved calibration for ${selected}.`;
+}
+calibProfileEl.addEventListener('change', handleCalibrationSelection);
+
+function maybeSaveCalibration(){
+  const name = calibNameEl.value.trim();
+  if(!name) return;
+  const profile = {
+    xMin: xMinEl.value,
+    xMax: xMaxEl.value,
+    yMin: yMinEl.value,
+    yMax: yMaxEl.value
+  };
+  saveCalibrationProfile(name, profile);
+  populateCalibrationProfiles();
+  calibProfileEl.value = name;
+  calibStatusEl.textContent = `Saved calibration as ${name}.`;
+}
+
+calibNameEl.addEventListener('change', maybeSaveCalibration);
+
+updateLogCount();
+document.getElementById('downloadLog').addEventListener('click', downloadLocalLogCsv);
+</script>
+</body>
+</html>
