@@ -1,0 +1,15 @@
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+pillow>=10.0            # PNG/JPG plot digitizer (spectre/ingestion/image_digitizer.py)
+pytest>=7.4
+
+# Optional, recommended for full JCAMP-DX spec support (ASDF-compressed files):
+# jcamp>=1.2.2
+
+torch>=2.0            # Phase 3: 1D-CNN deep learning model (spectre/models/cnn.py)
+
+# Future phases:
+# scikit-learn      # Phase 2: classical ML models
+# rdkit             # Phase 3+: SMARTS-based auto-labeling from SMILES
