@@ -15,3 +15,7 @@ data/raw/*
 data/labeled/*
 !data/raw/.gitkeep
 !data/labeled/.gitkeep
+
+# Trained CNN checkpoints -- regenerate with scripts/train_cnn.py
+models_ckpt/*.pt
+!models_ckpt/.gitkeep

@@ -26,13 +26,21 @@ python -m spectre.cli examples/sample_spectrum.csv --plot
 
 # Run the test suite
 pytest tests/ -v
+
+# Phase 3: train the 1D-CNN (bootstrapped on synthetic data -- see
+# spectre/synthetic/generator.py -- since a real labeled dataset (M3) doesn't
+# exist yet) and run inference with it instead of the rule engine
+python scripts/train_cnn.py                                  # ~1-2 min on CPU, saves models_ckpt/cnn_ir.pt
+python -m spectre.cli examples/sample_spectrum.csv --model cnn
 ```
 
 The rule-based classifier (Phase 1 from the roadmap below) is fully
 implemented and tested: ingestion (CSV + minimal JCAMP-DX), baseline
 correction, smoothing, peak detection, and the correlation-table rule
-engine all run end to end. Phases 2–5 (ML, deep learning, NMR) are
-architected for but not yet built — see the roadmap.
+engine all run end to end. **Phase 3 (1D-CNN) is now also implemented** —
+see `spectre/models/cnn.py`, bootstrapped on synthetic spectra (see below)
+since the real labeled dataset (M3) hasn't been built yet. Phase 2 (classical
+ML) and Phases 4-5 (NMR, multi-modal) are architected for but not yet built.
 
 ---
 
@@ -152,13 +160,19 @@ spectre/
 │   │   ├── correlation_table.py    # IR rule data                   [implemented]
 │   │   ├── rule_engine.py          # Phase 1 classifier              [implemented]
 │   │   ├── classical_ml.py         # Phase 2                         [planned]
-│   │   └── cnn.py                  # Phase 3                         [planned]
+│   │   └── cnn.py                  # Phase 3 classifier               [implemented]
+│   ├── synthetic/
+│   │   └── generator.py            # Synthetic spectra for CNN training (bootstrap for M3) [implemented]
 │   ├── evaluation/                 # Benchmarking against known spectra [planned]
-│   └── cli.py                      # End-to-end CLI entry point      [implemented]
+│   └── cli.py                      # End-to-end CLI entry point (--model rule|cnn) [implemented]
+├── scripts/
+│   └── train_cnn.py                # Trains + evaluates the Phase 3 CNN [implemented]
+├── models_ckpt/                     # Saved CNN checkpoints (gitignored except .gitkeep)
 └── tests/
     ├── test_parsers.py
     ├── test_peaks.py
-    └── test_rule_engine.py
+    ├── test_rule_engine.py
+    └── test_cnn.py
 ```
 
 ---
@@ -202,7 +216,7 @@ The same five-stage architecture is designed to generalize to NMR:
 - [ ] **M2**: Rule-based classifier reproducing correlation-table logic, benchmarked on known compounds
 - [ ] **M3**: Labeled dataset built via SMARTS auto-labeling (target: 500+ compounds)
 - [ ] **M4**: Classical ML model beating rule-based baseline
-- [ ] **M5**: 1D-CNN model, peak-evidence attribution for interpretability
+- [x] **M5**: 1D-CNN model (`spectre/models/cnn.py`, `scripts/train_cnn.py`) — bootstrapped on synthetic data since M3 isn't done yet; swap in real labeled data once M3 lands. Peak-evidence attribution is intentionally *not* provided by the CNN (see its docstring) — cross-check with `--model rule` for interpretability.
 - [ ] **M6**: Public release (PyPI package + documentation site)
 - [ ] **M7**: NMR ingestion + feature extraction module
 - [ ] **M8**: NMR classifier, feature parity with IR module
