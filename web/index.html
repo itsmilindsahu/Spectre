@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectre — IR Functional Group Identifier</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --bg-raised:#111111;
+    --bg-panel:#131313;
+    --line:#232323;
+    --line-soft:#1a1a1a;
+    --text:#e8e8e3;
+    --text-dim:#8a8a83;
+    --text-faint:#55554f;
+    --lime:#c8ff3d;
+    --lime-dim:#7a9c2c;
+    --red:#ff5d5d;
+    --mono:"IBM Plex Mono","JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:14px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--lime);}
+
+  .wrap{max-width:920px;margin:0 auto;padding:48px 20px 100px;}
+
+  header.top{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:36px;
+    flex-wrap:wrap;gap:16px;
+  }
+  .wordmark{
+    font-size:28px;letter-spacing:2px;font-weight:700;color:var(--text);
+  }
+  .wordmark span{color:var(--lime);}
+  .tagline{color:var(--text-dim);font-size:12px;letter-spacing:.5px;margin-top:4px;}
+  .badge{
+    font-size:10px;letter-spacing:1.5px;color:var(--bg);background:var(--lime);
+    padding:4px 8px;border-radius:2px;text-transform:uppercase;white-space:nowrap;
+    align-self:flex-start;
+  }
+
+  .eyebrow{
+    font-size:11px;letter-spacing:2px;color:var(--lime-dim);text-transform:uppercase;
+    margin-bottom:10px;display:flex;align-items:center;gap:8px;
+  }
+  .eyebrow::before{content:"";display:inline-block;width:14px;height:1px;background:var(--lime-dim);}
+
+  .panel{
+    background:var(--bg-panel);border:1px solid var(--line);border-radius:3px;
+    padding:24px;margin-bottom:24px;
+  }
+
+  .row{display:flex;gap:16px;flex-wrap:wrap;}
+  .field{flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;margin-bottom:16px;}
+  label{font-size:11px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;}
+  input[type=text], select{
+    background:var(--bg-raised);border:1px solid var(--line);color:var(--text);
+    padding:10px 12px;font-family:var(--mono);font-size:13px;border-radius:2px;outline:none;
+  }
+  input[type=text]:focus, select:focus{border-color:var(--lime-dim);}
+  select{appearance:none;background-image:linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+    background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px);
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
+
+  .dropzone{
+    border:1px dashed var(--line);border-radius:3px;padding:28px;text-align:center;
+    color:var(--text-dim);cursor:pointer;transition:border-color .15s,background .15s;
+    font-size:12.5px;
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--lime-dim);background:rgba(200,255,61,0.03);}
+  .dropzone strong{color:var(--text);}
+  .dropzone.has-file{border-color:var(--lime-dim);color:var(--text);}
+  #fileInput{display:none;}
+
+  .examples{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+  .chip{
+    font-size:11px;letter-spacing:.5px;color:var(--text-dim);border:1px solid var(--line);
+    padding:6px 10px;border-radius:20px;cursor:pointer;background:transparent;
+    font-family:var(--mono);
+  }
+  .chip:hover{border-color:var(--lime-dim);color:var(--lime);}
+
+  button.run{
+    width:100%;padding:14px;margin-top:8px;background:var(--lime);color:#0a0a0a;
+    border:none;border-radius:2px;font-family:var(--mono);font-weight:700;font-size:13px;
+    letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;
+  }
+  button.run:disabled{background:var(--line);color:var(--text-faint);cursor:not-allowed;}
+  button.run:not(:disabled):hover{background:#d9ff6b;}
+
+  .status-line{font-size:12px;color:var(--text-dim);margin-top:10px;min-height:16px;}
+  .status-line.err{color:var(--red);}
+  .status-line.ok{color:var(--lime-dim);}
+
+  #results{display:none;}
+  .section-title{font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);margin:0 0 14px;}
+
+  #plotCanvas{width:100%;height:280px;display:block;background:var(--bg-raised);border:1px solid var(--line);border-radius:3px;}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;color:var(--text-dim);font-weight:400;padding:6px 8px;border-bottom:1px solid var(--line);letter-spacing:.5px;text-transform:uppercase;font-size:10.5px;}
+  td{padding:6px 8px;border-bottom:1px solid var(--line-soft);}
+  tr:last-child td{border-bottom:none;}
+
+  .pred{border:1px solid var(--line);border-radius:3px;padding:14px 16px;margin-bottom:10px;background:var(--bg-raised);}
+  .pred-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;}
+  .pred-name{font-size:14px;font-weight:700;}
+  .pred-conf{font-size:12px;color:var(--lime);font-weight:700;white-space:nowrap;}
+  .bar-track{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-bottom:10px;}
+  .bar-fill{height:100%;background:var(--lime);}
+  .notes{list-style:none;margin:0;padding:0;font-size:11.5px;color:var(--text-dim);}
+  .notes li{padding:3px 0 3px 14px;position:relative;}
+  .notes li::before{content:"·";position:absolute;left:2px;color:var(--lime-dim);}
+
+  .empty-note{color:var(--text-dim);font-size:12.5px;padding:10px 0;}
+
+  .log-bar{
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+    margin-top:28px;padding-top:18px;border-top:1px solid var(--line);
+  }
+  .log-count{font-size:11.5px;color:var(--text-dim);}
+  .log-count strong{color:var(--lime);}
+  button.ghost{
+    background:transparent;border:1px solid var(--line);color:var(--text-dim);
+    padding:8px 14px;border-radius:2px;font-family:var(--mono);font-size:11.5px;
+    cursor:pointer;letter-spacing:.5px;
+  }
+  button.ghost:hover{border-color:var(--lime-dim);color:var(--lime);}
+
+  details.setup{margin-top:36px;border:1px solid var(--line);border-radius:3px;background:var(--bg-panel);}
+  details.setup summary{cursor:pointer;padding:14px 20px;font-size:11.5px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;}
+  details.setup summary:hover{color:var(--lime);}
+  details.setup .inner{padding:0 20px 20px;font-size:12.5px;color:var(--text-dim);}
+  details.setup code{background:var(--bg-raised);padding:1px 5px;border-radius:2px;color:var(--lime);}
+  details.setup pre{background:var(--bg-raised);border:1px solid var(--line);padding:12px;border-radius:3px;overflow-x:auto;font-size:11px;color:var(--text);}
+  details.setup ol{padding-left:18px;}
+  details.setup li{margin-bottom:6px;}
+
+  footer{margin-top:40px;color:var(--text-faint);font-size:11px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <div class="wordmark">SPECTRE<span>.</span></div>
+      <div class="tagline">Automated IR functional-group identification — from AXL / Axiom Labs</div>
+    </div>
+    <div class="badge">IISER Network Beta</div>
+  </header>
+
+  <div class="panel">
+    <div class="eyebrow">Step 1 — Identify yourself</div>
+    <div class="row">
+      <div class="field">
+        <label for="profName">Name</label>
+        <input type="text" id="profName" placeholder="Dr. First Last" autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="institute">Institute</label>
+        <select id="institute">
+          <option value="">Select an IISER</option>
+          <option>IISER Tirupati</option>
+          <option>IISER Pune</option>
+          <option>IISER Kolkata</option>
+          <option>IISER Mohali</option>
+          <option>IISER Bhopal</option>
+          <option>IISER Thiruvananthapuram</option>
+          <option>IISER Berhampur</option>
+          <option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" id="otherInstituteField" style="display:none;">
+      <label for="otherInstitute">Institute name</label>
+      <input type="text" id="otherInstitute" placeholder="Type your institute">
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="eyebrow">Step 2 — Provide a spectrum</div>
+    <div class="dropzone" id="dropzone">
+      <div id="dzText"><strong>Click to upload</strong> or drag a file here<br>CSV/TSV (wavenumber, absorbance) — or a PNG/JPG of a plotted spectrum</div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.tsv,.txt,.png,.jpg,.jpeg">
+    <div class="examples">
+      <button class="chip" id="exAcid">Try example — carboxylic-acid-like</button>
+      <button class="chip" id="exAlcohol">Try example — alcohol-like</button>
+    </div>
+
+    <div id="imageCalibration" style="display:none;margin-top:18px;">
+      <div class="eyebrow" style="margin-bottom:14px;">Plot image — axis calibration</div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="calibProfile">Saved calibration (reuse for the same instrument software)</label>
+        <select id="calibProfile"><option value="">— None / enter axis range manually —</option></select>
+      </div>
+      <div class="row" id="axisRangeFields">
+        <div class="field"><label for="xMin">X-axis at left edge (cm⁻¹)</label><input type="text" id="xMin" placeholder="4000"></div>
+        <div class="field"><label for="xMax">X-axis at right edge (cm⁻¹)</label><input type="text" id="xMax" placeholder="400"></div>
+        <div class="field"><label for="yMin">Y-axis at bottom edge</label><input type="text" id="yMin" placeholder="0"></div>
+        <div class="field"><label for="yMax">Y-axis at top edge</label><input type="text" id="yMax" placeholder="1.05"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="calibName">Save this calibration as (optional)</label>
+          <input type="text" id="calibName" placeholder="e.g. Chem Dept FTIR software">
+        </div>
+      </div>
+      <div class="status-line" id="calibStatus">Needs a visible boxed axis frame and a single, single-colored curve. Plot must show the whole 4000–400 cm⁻¹ range (or whatever range you enter above) at its edges.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="eyebrow">Step 3 — Run</div>
+    <div class="field" style="margin-bottom:16px;">
+      <label for="modelSelect">Classifier</label>
+      <select id="modelSelect">
+        <option value="rule">Rule Engine (Phase 1 — fast, interpretable, peak-level evidence)</option>
+        <option value="cnn">CNN (Phase 3 — learned from spectrum shape, no peak evidence)</option>
+      </select>
+    </div>
+    <button class="run" id="runBtn" disabled>Run Spectre analysis</button>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+
+  <div id="results" class="panel">
+    <div class="section-title">Spectrum</div>
+    <canvas id="plotCanvas" width="900" height="280"></canvas>
+
+    <div class="section-title" style="margin-top:26px;">Detected peaks</div>
+    <table id="peakTable">
+      <thead><tr><th>Wavenumber (cm⁻¹)</th><th>Intensity</th><th>Width (cm⁻¹)</th><th>Shape</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="section-title" style="margin-top:26px;">Predicted functional groups</div>
+    <div id="predictions"></div>
+
+    <div class="log-bar">
+      <div class="log-count">Logged locally this browser: <strong id="logCount">0</strong> submission(s)</div>
+      <button class="ghost" id="downloadLog">Download local log (.csv)</button>
+    </div>
+  </div>
+
+  <details class="setup">
+    <summary>Admin setup — connect central logging (Google Sheet)</summary>
+    <div class="inner">
+      <p>This page runs entirely client-side (safe for GitHub Pages — no backend). Every run is saved to
+      the visiting browser's local storage, and a <strong>Download local log (.csv)</strong> button lets any
+      user export what happened in their own browser. To collect submissions from <em>everyone</em> in one
+      place, wire up a free Google Sheet + Apps Script endpoint:</p>
+      <ol>
+        <li>Create a new Google Sheet, e.g. <code>Spectre Submissions</code>.</li>
+        <li>Open <code>Extensions → Apps Script</code>, delete the placeholder code, and paste in the contents of <code>sheet-logger.gs</code> (shipped alongside this file).</li>
+        <li>Click <code>Deploy → New deployment</code>, type = <code>Web app</code>, execute as <code>Me</code>, access = <code>Anyone</code>.</li>
+        <li>Copy the deployment URL and paste it into the <code>SHEET_ENDPOINT</code> constant near the top of the <code>&lt;script&gt;</code> block in this file.</li>
+        <li>Re-upload this file to your GitHub Pages repo. Every future submission will silently POST to that sheet in addition to being logged locally.</li>
+      </ol>
+      <p>Until <code>SHEET_ENDPOINT</code> is set, the tool works fully — logging just stays local to each visitor's browser.</p>
+    </div>
+  </details>
+
+  <details class="setup">
+    <summary>Admin setup — deploy the CNN (Phase 3)</summary>
+    <div class="inner">
+      <p>The CNN classifier runs entirely in the visitor's browser via <a href="https://onnxruntime.ai/docs/tutorials/web/" target="_blank" rel="noopener">onnxruntime-web</a> (loaded from a CDN, no install needed) — no Python backend, same as everything else on this page.</p>
+      <ol>
+        <li>Train a checkpoint: <code>python scripts/train_cnn.py</code> (from the main Spectre repo, not this web folder).</li>
+        <li>Export it: <code>python scripts/export_onnx.py</code> — this writes <code>web/cnn_ir.onnx</code> and <code>web/cnn_ir_labels.json</code>.</li>
+        <li>Push <em>both</em> files to your GitHub Pages repo in the same folder as this <code>index.html</code> — the page fetches them by relative path (<code>cnn_ir.onnx</code>, <code>cnn_ir_labels.json</code>).</li>
+        <li>That's it — the "CNN (Phase 3)" option in the classifier dropdown will load and run them on first use.</li>
+      </ol>
+      <p>This deployment already ships a checkpoint trained on synthetic data (see <code>spectre/synthetic/generator.py</code> in the main repo) — retrain on real labeled spectra once available and re-export to replace it.</p>
+    </div>
+  </details>
+
+  <footer>Spectre — Phase 1 rule engine + Phase 3 CNN (IR only). Client-side reimplementation for demo/teaching use. PNG/JPG plot digitization assumes a visible boxed axis frame and a single-colored curve.</footer>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your Google Apps Script Web App URL here once
+   deployed (see "Admin setup" above). Leave "" to log locally only.
+   ============================================================ */
+const SHEET_ENDPOINT = "";
+
+/* ============================================================
+   1. CORRELATION TABLE  (ported from spectre/models/correlation_table.py)
+   ============================================================ */
+const CORRELATION_TABLE = [
+  {low:3600, high:3200, shape:"broad",  bond:"O-H stretch", group:"Alcohol / Phenol",
+   note:"Broad, smooth, u-shaped curve ('tongue'). Free/H-bonded O-H stretch.", priority:3},
+  {low:3400, high:3250, shape:"sharp",  bond:"N-H stretch", group:"Amine / Amide",
+   note:"Sharper and weaker than O-H. Primary amine: two peaks. Secondary amine/amide: one peak.", priority:3},
+  {low:3300, high:2500, shape:"broad",  bond:"O-H stretch (H-bonded dimer)", group:"Carboxylic Acid",
+   note:"Extremely broad, 'messy valley' centered near 3000, often overlaps the C-H stretch region entirely.", priority:4},
+  {low:3333, high:3267, shape:"sharp",  bond:"sp C-H stretch", group:"Terminal Alkyne",
+   note:"Sharp peak right around 3300 cm^-1.", priority:3},
+  {low:3100, high:3010, shape:"sharp",  bond:"sp2 C-H stretch", group:"Alkene / Aromatic ring",
+   note:"Sharp peak just above the 3000 cm^-1 boundary line.", priority:2},
+  {low:2950, high:2850, shape:"sharp",  bond:"sp3 C-H stretch", group:"Alkane",
+   note:"Sharp, jagged peak(s) just below the 3000 cm^-1 boundary line. Present in almost all organic compounds — low diagnostic value alone.", priority:1},
+  {low:2260, high:2100, shape:"sharp",  bond:"C#C or C#N stretch", group:"Alkyne / Nitrile",
+   note:"Thin, short, weak spike. Easy to miss — scan carefully.", priority:2},
+  {low:1760, high:1665, shape:"sharp",  bond:"C=O stretch", group:"Carbonyl (Ketone / Aldehyde / Ester / Carboxylic Acid)",
+   note:"Strong, sharp, deep peak — usually the most diagnostic single peak in the whole spectrum.", priority:5},
+  {low:1680, high:1640, shape:"medium", bond:"C=C stretch", group:"Alkene",
+   note:"Much weaker and narrower than the carbonyl peak nearby.", priority:2},
+];
+function ruleContains(rule, wavenumber){ return rule.high <= wavenumber && wavenumber <= rule.low; }
+
+/* ============================================================
+   2. PREPROCESSING  (ported/simplified from preprocessing/*.py)
+   ============================================================ */
+// Rolling-minimum + smoothing baseline: a lightweight browser-friendly
+// stand-in for the backend's full ALS (asymmetric least squares) baseline.
+function estimateBaseline(y, windowFrac=0.06){
+  const n = y.length;
+  const w = Math.max(5, Math.round(n*windowFrac));
+  const rollMin = new Array(n);
+  for(let i=0;i<n;i++){
+    let lo=Math.max(0,i-w), hi=Math.min(n-1,i+w), m=Infinity;
+    for(let j=lo;j<=hi;j++) if(y[j]<m) m=y[j];
+    rollMin[i]=m;
+  }
+  // smooth the rolling-min envelope so the baseline itself is not jagged
+  const baseline = new Array(n);
+  const sw = Math.max(3, Math.round(w/2));
+  for(let i=0;i<n;i++){
+    let lo=Math.max(0,i-sw), hi=Math.min(n-1,i+sw), s=0, c=0;
+    for(let j=lo;j<=hi;j++){ s+=rollMin[j]; c++; }
+    baseline[i]=s/c;
+  }
+  return baseline;
+}
+function correctBaseline(y){
+  const b = estimateBaseline(y);
+  return y.map((v,i)=>Math.max(0, v-b[i]));
+}
+// 9-point cubic Savitzky-Golay smoothing coefficients (standard table)
+const SG9 = [-21,14,39,54,59,54,39,14,-21].map(c=>c/231);
+function smooth(y){
+  const n=y.length, half=4;
+  if(n < 9) return y.slice();
+  const out=new Array(n);
+  for(let i=0;i<n;i++){
+    let s=0;
+    for(let k=-half;k<=half;k++){
+      let idx=i+k;
+      if(idx<0) idx=-idx;
+      if(idx>n-1) idx=2*(n-1)-idx;
+      s += y[idx]*SG9[k+half];
+    }
+    out[i]=s;
+  }
+  return out;
+}
+function normalize(y){
+  const m = Math.max(...y) || 1;
+  return y.map(v=>v/m);
+}
+
+/* ============================================================
+   3. PEAK DETECTION  (ported/simplified from features/peaks.py)
+   ============================================================ */
+function shapeOf(width){
+  if(width>=150) return "broad";
+  if(width>=50) return "medium";
+  return "sharp";
+}
+function detectPeaks(x, y, {height=0.05, prominence=0.03, distance=15}={}){
+  const n=y.length;
+  const candidates=[];
+  for(let i=1;i<n-1;i++){
+    if(y[i] < height) continue;
+    if(!(y[i] >= y[i-1] && y[i] >= y[i+1])) continue;
+    if(y[i]===y[i-1]) continue; // avoid double-counting plateaus
+    // topographic prominence
+    let leftMin=y[i];
+    for(let j=i-1;j>=0;j--){ if(y[j] > y[i]) break; if(y[j] < leftMin) leftMin=y[j]; }
+    let rightMin=y[i];
+    for(let j=i+1;j<n;j++){ if(y[j] > y[i]) break; if(y[j] < rightMin) rightMin=y[j]; }
+    const prom = y[i] - Math.max(leftMin, rightMin);
+    if(prom < prominence) continue;
+    candidates.push({idx:i, height:y[i], prom});
+  }
+  candidates.sort((a,b)=>b.height-a.height);
+  const chosen=[];
+  for(const c of candidates){
+    if(chosen.some(p=>Math.abs(p.idx-c.idx) < distance)) continue;
+    chosen.push(c);
+  }
+  const peaks = chosen.map(c=>{
+    const i=c.idx, half=c.height/2;
+    let li=i;
+    while(li>0 && y[li] > half) li--;
+    let ri=i;
+    while(ri<n-1 && y[ri] > half) ri++;
+    // linear interpolation for sub-sample crossing, in x-units directly
+    function interpX(i0,i1){
+      const y0=y[i0], y1=y[i1];
+      if(y1===y0) return x[i0];
+      const t=(half-y0)/(y1-y0);
+      return x[i0] + t*(x[i1]-x[i0]);
+    }
+    const xLeft = li<i ? interpX(li, li+1) : x[i];
+    const xRight = ri>i ? interpX(ri-1, ri) : x[i];
+    const width = Math.abs(xLeft - xRight);
+    return {wavenumber:x[i], intensity:y[i], width, shape:shapeOf(width)};
+  });
+  peaks.sort((a,b)=>b.wavenumber-a.wavenumber);
+  return peaks;
+}
+
+/* ============================================================
+   4. RULE ENGINE  (ported from models/rule_engine.py)
+   ============================================================ */
+function shapeMatchScore(peakShape, ruleShape){
+  if(ruleShape==="variable") return 0.7;
+  if(peakShape===ruleShape) return 1.0;
+  const order=["sharp","medium","broad"];
+  const dist=Math.abs(order.indexOf(peakShape)-order.indexOf(ruleShape));
+  return Math.max(0.3, 1.0 - 0.35*dist);
+}
+function classify(peaks){
+  const hits={};
+  for(const peak of peaks){
+    for(const rule of CORRELATION_TABLE){
+      if(!ruleContains(rule, peak.wavenumber)) continue;
+      const shapeScore = shapeMatchScore(peak.shape, rule.shape);
+      const confidence = Math.min(1.0, (rule.priority/5.0)*shapeScore*(0.5+0.5*peak.intensity));
+      if(!hits[rule.group]) hits[rule.group] = {functional_group:rule.group, confidence:0, evidence:[], matched_rules:[]};
+      const pred = hits[rule.group];
+      pred.evidence.push(peak);
+      pred.matched_rules.push(`${rule.bond} near ${peak.wavenumber.toFixed(0)} cm⁻¹ (${rule.note})`);
+      const bump = pred.evidence.length>1 ? 0.05*(pred.evidence.length-1) : 0.0;
+      pred.confidence = Math.min(0.99, Math.max(pred.confidence, confidence) + bump);
+    }
+  }
+  return Object.values(hits).sort((a,b)=>b.confidence-a.confidence);
+}
+
+/* ============================================================
+   5. INGESTION  (ported/simplified from ingestion/parsers.py)
+   ============================================================ */
+function parseDelimited(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
+  const x=[], y=[];
+  for(const line of lines){
+    const parts = line.split(/[,\t]/).map(s=>s.trim());
+    if(parts.length<2) continue;
+    const a=parseFloat(parts[0]), b=parseFloat(parts[1]);
+    if(Number.isNaN(a) || Number.isNaN(b)) continue; // silently skips header row
+    x.push(a); y.push(b);
+  }
+  if(x.length===0) throw new Error("No numeric (wavenumber, intensity) rows found in file.");
+  if(x[0] < x[x.length-1]){ x.reverse(); y.reverse(); }
+  return {x,y};
+}
+function parseEmbedded(str){
+  const x=[], y=[];
+  for(const pair of str.split(";")){
+    if(!pair) continue;
+    const [a,b]=pair.split(",");
+    x.push(parseFloat(a)); y.push(parseFloat(b));
+  }
+  return {x,y};
+}
+
+/* ============================================================
+   6. EMBEDDED EXAMPLE SPECTRA (downsampled from examples/*.csv)
+   ============================================================ */
+const EXAMPLE_ACID = "4000,0.0034;3996,0.0000;3992,0.0020;3988,0.0025;3984,0.0041;3980,0.0015;3976,0.0004;3972,0.0047;3968,0.0002;3964,0.0023;3960,0.0067;3956,0.0037;3952,0.0066;3948,0.0000;3944,0.0022;3940,0.0000;3936,0.0074;3932,0.0083;3928,0.0000;3924,0.0022;3920,0.0069;3916,0.0000;3912,0.0074;3908,0.0031;3904,0.0000;3900,0.0037;3896,0.0012;3892,0.0103;3888,0.0034;3884,0.0078;3880,0.0018;3876,0.0113;3872,0.0042;3868,0.0109;3864,0.0096;3860,0.0104;3856,0.0046;3852,0.0144;3848,0.0010;3844,0.0104;3840,0.0053;3836,0.0147;3832,0.0102;3828,0.0091;3824,0.0197;3820,0.0188;3816,0.0149;3812,0.0063;3808,0.0118;3804,0.0174;3800,0.0164;3796,0.0050;3792,0.0114;3788,0.0165;3784,0.0197;3780,0.0165;3776,0.0187;3772,0.0146;3768,0.0211;3764,0.0095;3760,0.0165;3756,0.0323;3752,0.0369;3748,0.0318;3744,0.0262;3740,0.0236;3736,0.0280;3732,0.0268;3728,0.0269;3724,0.0245;3720,0.0317;3716,0.0247;3712,0.0298;3708,0.0396;3704,0.0348;3700,0.0430;3696,0.0352;3692,0.0395;3688,0.0465;3684,0.0393;3680,0.0441;3676,0.0505;3672,0.0368;3668,0.0405;3664,0.0420;3660,0.0353;3656,0.0562;3652,0.0417;3648,0.0482;3644,0.0538;3640,0.0534;3636,0.0551;3632,0.0584;3628,0.0633;3624,0.0597;3620,0.0630;3616,0.0562;3612,0.0674;3608,0.0655;3604,0.0736;3600,0.0708;3596,0.0763;3592,0.0657;3588,0.0743;3584,0.0853;3580,0.0824;3576,0.0797;3572,0.0794;3568,0.0879;3564,0.0882;3560,0.0923;3556,0.0939;3552,0.1036;3548,0.1103;3544,0.1084;3540,0.1072;3536,0.1026;3532,0.1164;3528,0.1121;3524,0.1216;3520,0.1202;3516,0.1216;3512,0.1205;3508,0.1262;3504,0.1215;3500,0.1404;3496,0.1219;3492,0.1370;3488,0.1434;3484,0.1494;3480,0.1445;3476,0.1596;3472,0.1572;3468,0.1570;3464,0.1599;3460,0.1576;3456,0.1683;3452,0.1766;3448,0.1781;3444,0.1765;3440,0.1835;3436,0.1921;3432,0.1940;3428,0.1964;3424,0.2055;3420,0.1906;3416,0.2101;3412,0.2116;3408,0.2235;3404,0.2158;3400,0.2250;3396,0.2233;3392,0.2221;3388,0.2275;3384,0.2423;3380,0.2407;3376,0.2495;3372,0.2461;3368,0.2535;3364,0.2589;3360,0.2567;3356,0.2668;3352,0.2736;3348,0.2855;3344,0.2772;3340,0.2775;3336,0.2899;3332,0.2921;3328,0.2956;3324,0.3155;3320,0.3122;3316,0.3104;3312,0.3147;3308,0.3263;3304,0.3144;3300,0.3361;3296,0.3402;3292,0.3384;3288,0.3388;3284,0.3406;3280,0.3524;3276,0.3528;3272,0.3562;3268,0.3690;3264,0.3746;3260,0.3802;3256,0.3801;3252,0.3821;3248,0.3832;3244,0.3881;3240,0.4032;3236,0.4030;3232,0.3992;3228,0.4111;3224,0.4086;3220,0.4180;3216,0.4224;3212,0.4211;3208,0.4331;3204,0.4396;3200,0.4344;3196,0.4490;3192,0.4448;3188,0.4516;3184,0.4521;3180,0.4555;3176,0.4522;3172,0.4713;3168,0.4632;3164,0.4707;3160,0.4854;3156,0.4799;3152,0.4790;3148,0.4904;3144,0.4908;3140,0.4874;3136,0.4919;3132,0.4954;3128,0.5049;3124,0.5041;3120,0.5081;3116,0.5042;3112,0.4998;3108,0.5128;3104,0.5140;3100,0.5217;3096,0.5189;3092,0.5246;3088,0.5292;3084,0.5356;3080,0.5289;3076,0.5315;3072,0.5329;3068,0.5416;3064,0.5316;3060,0.5400;3056,0.5418;3052,0.5436;3048,0.5453;3044,0.5416;3040,0.5531;3036,0.5458;3032,0.5514;3028,0.5487;3024,0.5537;3020,0.5511;3016,0.5511;3012,0.5480;3008,0.5588;3004,0.5538;3000,0.5497;2996,0.5500;2992,0.5537;2988,0.5476;2984,0.5515;2980,0.5569;2976,0.5551;2972,0.5884;2968,0.6274;2964,0.6976;2960,0.7649;2956,0.8385;2952,0.8819;2948,0.8860;2944,0.8394;2940,0.7627;2936,0.6809;2932,0.6264;2928,0.5749;2924,0.5610;2920,0.5537;2916,0.5735;2912,0.6224;2908,0.6888;2904,0.7537;2900,0.7754;2896,0.7356;2892,0.6818;2888,0.5987;2884,0.5577;2880,0.5248;2876,0.5079;2872,0.5012;2868,0.4951;2864,0.4957;2860,0.5009;2856,0.4892;2852,0.4910;2848,0.4839;2844,0.4792;2840,0.4699;2836,0.4674;2832,0.4667;2828,0.4646;2824,0.4577;2820,0.4513;2816,0.4541;2812,0.4534;2808,0.4451;2804,0.4364;2800,0.4320;2796,0.4313;2792,0.4420;2788,0.4255;2784,0.4133;2780,0.4180;2776,0.4095;2772,0.4126;2768,0.3997;2764,0.4014;2760,0.4034;2756,0.3979;2752,0.3875;2748,0.3800;2744,0.3834;2740,0.3802;2736,0.3705;2732,0.3695;2728,0.3600;2724,0.3544;2720,0.3589;2716,0.3487;2712,0.3540;2708,0.3375;2704,0.3271;2700,0.3308;2696,0.3247;2692,0.3076;2688,0.3137;2684,0.3115;2680,0.3043;2676,0.3048;2672,0.2986;2668,0.2991;2664,0.2927;2660,0.2819;2656,0.2764;2652,0.2817;2648,0.2663;2644,0.2666;2640,0.2622;2636,0.2580;2632,0.2618;2628,0.2534;2624,0.2499;2620,0.2490;2616,0.2300;2612,0.2363;2608,0.2278;2604,0.2294;2600,0.2283;2596,0.2155;2592,0.2144;2588,0.2026;2584,0.2177;2580,0.2016;2576,0.1998;2572,0.1983;2568,0.1870;2564,0.1854;2560,0.1806;2556,0.1795;2552,0.1751;2548,0.1726;2544,0.1810;2540,0.1709;2536,0.1676;2532,0.1521;2528,0.1558;2524,0.1631;2520,0.1516;2516,0.1500;2512,0.1446;2508,0.1367;2504,0.1383;2500,0.1308;2496,0.1296;2492,0.1377;2488,0.1292;2484,0.1183;2480,0.1127;2476,0.1142;2472,0.1029;2468,0.1158;2464,0.1119;2460,0.1043;2456,0.1099;2452,0.1033;2448,0.0951;2444,0.0920;2440,0.0913;2436,0.0862;2432,0.0922;2428,0.0881;2424,0.0843;2420,0.0879;2416,0.0792;2412,0.0728;2408,0.0748;2404,0.0753;2400,0.0714;2396,0.0682;2392,0.0668;2388,0.0658;2384,0.0788;2380,0.0654;2376,0.0617;2372,0.0609;2368,0.0581;2364,0.0469;2360,0.0468;2356,0.0452;2352,0.0502;2348,0.0523;2344,0.0501;2340,0.0587;2336,0.0513;2332,0.0454;2328,0.0434;2324,0.0464;2320,0.0327;2316,0.0357;2312,0.0370;2308,0.0297;2304,0.0331;2300,0.0287;2296,0.0345;2292,0.0374;2288,0.0344;2284,0.0273;2280,0.0345;2276,0.0340;2272,0.0278;2268,0.0254;2264,0.0188;2260,0.0229;2256,0.0273;2252,0.0207;2248,0.0191;2244,0.0302;2240,0.0150;2236,0.0150;2232,0.0149;2228,0.0124;2224,0.0115;2220,0.0216;2216,0.0204;2212,0.0179;2208,0.0172;2204,0.0136;2200,0.0145;2196,0.0146;2192,0.0139;2188,0.0146;2184,0.0160;2180,0.0017;2176,0.0074;2172,0.0070;2168,0.0053;2164,0.0116;2160,0.0072;2156,0.0032;2152,0.0075;2148,0.0076;2144,0.0079;2140,0.0117;2136,0.0095;2132,0.0059;2128,0.0044;2124,0.0108;2120,0.0105;2116,0.0000;2112,0.0000;2108,0.0004;2104,0.0000;2100,0.0029;2096,0.0085;2092,0.0028;2088,0.0077;2084,0.0017;2080,0.0000;2076,0.0041;2072,0.0085;2068,0.0000;2064,0.0037;2060,0.0000;2056,0.0016;2052,0.0000;2048,0.0000;2044,0.0077;2040,0.0038;2036,0.0000;2032,0.0006;2028,0.0031;2024,0.0000;2020,0.0032;2016,0.0000;2012,0.0000;2008,0.0033;2004,0.0035;2000,0.0000;1996,0.0000;1992,0.0077;1988,0.0050;1984,0.0015;1980,0.0016;1976,0.0000;1972,0.0024;1968,0.0046;1964,0.0000;1960,0.0058;1956,0.0000;1952,0.0016;1948,0.0068;1944,0.0000;1940,0.0000;1936,0.0000;1932,0.0035;1928,0.0000;1924,0.0006;1920,0.0028;1916,0.0058;1912,0.0000;1908,0.0013;1904,0.0050;1900,0.0019;1896,0.0000;1892,0.0000;1888,0.0051;1884,0.0008;1880,0.0032;1876,0.0003;1872,0.0025;1868,0.0000;1864,0.0016;1860,0.0000;1856,0.0000;1852,0.0000;1848,0.0000;1844,0.0019;1840,0.0000;1836,0.0033;1832,0.0000;1828,0.0000;1824,0.0026;1820,0.0108;1816,0.0000;1812,0.0102;1808,0.0000;1804,0.0000;1800,0.0000;1796,0.0056;1792,0.0032;1788,0.0066;1784,0.0002;1780,0.0006;1776,0.0000;1772,0.0110;1768,0.0000;1764,0.0000;1760,0.0062;1756,0.0026;1752,0.0000;1748,0.0034;1744,0.0017;1740,0.0000;1736,0.0027;1732,0.0000;1728,0.0399;1724,0.1933;1720,0.5932;1716,0.9342;1712,0.8037;1708,0.3758;1704,0.1053;1700,0.0101;1696,0.0028;1692,0.0065;1688,0.0069;1684,0.0000;1680,0.0021;1676,0.0000;1672,0.0009;1668,0.0013;1664,0.0139;1660,0.0074;1656,0.0041;1652,0.0075;1648,0.0000;1644,0.0008;1640,0.0079;1636,0.0127;1632,0.0000;1628,0.0000;1624,0.0025;1620,0.0000;1616,0.0034;1612,0.0056;1608,0.0000;1604,0.0000;1600,0.0000;1596,0.0000;1592,0.0000;1588,0.0000;1584,0.0000;1580,0.0000;1576,0.0005;1572,0.0000;1568,0.0000;1564,0.0000;1560,0.0003;1556,0.0041;1552,0.0039;1548,0.0027;1544,0.0050;1540,0.0000;1536,0.0000;1532,0.0033;1528,0.0016;1524,0.0000;1520,0.0091;1516,0.0000;1512,0.0069;1508,0.0038;1504,0.0000;1500,0.0028;1496,0.0061;1492,0.0045;1488,0.0011;1484,0.0001;1480,0.0000;1476,0.0095;1472,0.0054;1468,0.0012;1464,0.0000;1460,0.0024;1456,0.0000;1452,0.0000;1448,0.0000;1444,0.0000;1440,0.0022;1436,0.0075;1432,0.0000;1428,0.0285;1424,0.0473;1420,0.0950;1416,0.1581;1412,0.1961;1408,0.1969;1404,0.1620;1400,0.0973;1396,0.0573;1392,0.0253;1388,0.0040;1384,0.0018;1380,0.0000;1376,0.0000;1372,0.0000;1368,0.0000;1364,0.0000;1360,0.0029;1356,0.0072;1352,0.0015;1348,0.0064;1344,0.0013;1340,0.0000;1336,0.0000;1332,0.0000;1328,0.0000;1324,0.0078;1320,0.0062;1316,0.0000;1312,0.0064;1308,0.0000;1304,0.0027;1300,0.0065;1296,0.0138;1292,0.0524;1288,0.1359;1284,0.2469;1280,0.3009;1276,0.2434;1272,0.1455;1268,0.0595;1264,0.0081;1260,0.0000;1256,0.0053;1252,0.0000;1248,0.0000;1244,0.0032;1240,0.0000;1236,0.0000;1232,0.0041;1228,0.0000;1224,0.0028;1220,0.0075;1216,0.0019;1212,0.0000;1208,0.0000;1204,0.0028;1200,0.0000;1196,0.0000;1192,0.0014;1188,0.0000;1184,0.0000;1180,0.0000;1176,0.0001;1172,0.0000;1168,0.0049;1164,0.0028;1160,0.0000;1156,0.0000;1152,0.0039;1148,0.0068;1144,0.0000;1140,0.0000;1136,0.0000;1132,0.0003;1128,0.0000;1124,0.0000;1120,0.0015;1116,0.0000;1112,0.0000;1108,0.0000;1104,0.0049;1100,0.0000;1096,0.0000;1092,0.0000;1088,0.0000;1084,0.0079;1080,0.0000;1076,0.0000;1072,0.0000;1068,0.0059;1064,0.0000;1060,0.0082;1056,0.0000;1052,0.0036;1048,0.0000;1044,0.0027;1040,0.0000;1036,0.0001;1032,0.0102;1028,0.0000;1024,0.0000;1020,0.0000;1016,0.0000;1012,0.0011;1008,0.0000;1004,0.0000;1000,0.0063;996,0.0000;992,0.0000;988,0.0000;984,0.0000;980,0.0000;976,0.0000;972,0.0000;968,0.0000;964,0.0007;960,0.0063;956,0.0010;952,0.0044;948,0.0000;944,0.0000;940,0.0059;936,0.0000;932,0.0104;928,0.0000;924,0.0000;920,0.0000;916,0.0000;912,0.0008;908,0.0047;904,0.0066;900,0.0000;896,0.0000;892,0.0000;888,0.0081;884,0.0000;880,0.0017;876,0.0012;872,0.0000;868,0.0003;864,0.0063;860,0.0000;856,0.0000;852,0.0089;848,0.0021;844,0.0134;840,0.0000;836,0.0000;832,0.0000;828,0.0049;824,0.0043;820,0.0000;816,0.0034;812,0.0000;808,0.0004;804,0.0000;800,0.0000;796,0.0021;792,0.0051;788,0.0035;784,0.0000;780,0.0071;776,0.0013;772,0.0031;768,0.0000;764,0.0055;760,0.0056;756,0.0024;752,0.0044;748,0.0000;744,0.0000;740,0.0005;736,0.0000;732,0.0000;728,0.0000;724,0.0048;720,0.0087;716,0.0000;712,0.0000;708,0.0000;704,0.0022;700,0.0027;696,0.0154;692,0.0000;688,0.0000;684,0.0000;680,0.0000;676,0.0046;672,0.0000;668,0.0000;664,0.0000;660,0.0000;656,0.0000;652,0.0027;648,0.0041;644,0.0000;640,0.0000;636,0.0024;632,0.0015;628,0.0000;624,0.0031;620,0.0011;616,0.0000;612,0.0000;608,0.0000;604,0.0000;600,0.0020;596,0.0000;592,0.0025;588,0.0006;584,0.0006;580,0.0000;576,0.0141;572,0.0094;568,0.0000;564,0.0000;560,0.0099;556,0.0055;552,0.0000;548,0.0097;544,0.0012;540,0.0005;536,0.0025;532,0.0071;528,0.0055;524,0.0000;520,0.0000;516,0.0044;512,0.0004;508,0.0000;504,0.0050;500,0.0000;496,0.0008;492,0.0027;488,0.0000;484,0.0022;480,0.0000;476,0.0000;472,0.0000;468,0.0065;464,0.0047;460,0.0009;456,0.0000;452,0.0000;448,0.0052;444,0.0000;440,0.0036;436,0.0069;432,0.0024;428,0.0018;424,0.0017;420,0.0032;416,0.0015;412,0.0000;408,0.0090;404,0.0000;400,0.0048";
+const EXAMPLE_ALCOHOL = "4000,0.0000;3996,0.0000;3992,0.0000;3988,0.0005;3984,0.0000;3980,0.0000;3976,0.0008;3972,0.0000;3968,0.0000;3964,0.0000;3960,0.0006;3956,0.0068;3952,0.0000;3948,0.0004;3944,0.0000;3940,0.0010;3936,0.0000;3932,0.0000;3928,0.0000;3924,0.0000;3920,0.0000;3916,0.0000;3912,0.0058;3908,0.0000;3904,0.0000;3900,0.0000;3896,0.0000;3892,0.0000;3888,0.0000;3884,0.0013;3880,0.0004;3876,0.0000;3872,0.0000;3868,0.0006;3864,0.0000;3860,0.0055;3856,0.0000;3852,0.0048;3848,0.0000;3844,0.0000;3840,0.0000;3836,0.0000;3832,0.0000;3828,0.0000;3824,0.0067;3820,0.0000;3816,0.0000;3812,0.0019;3808,0.0048;3804,0.0042;3800,0.0000;3796,0.0094;3792,0.0041;3788,0.0000;3784,0.0000;3780,0.0000;3776,0.0000;3772,0.0000;3768,0.0018;3764,0.0045;3760,0.0000;3756,0.0000;3752,0.0000;3748,0.0067;3744,0.0057;3740,0.0003;3736,0.0000;3732,0.0000;3728,0.0088;3724,0.0021;3720,0.0006;3716,0.0062;3712,0.0000;3708,0.0052;3704,0.0015;3700,0.0081;3696,0.0000;3692,0.0000;3688,0.0000;3684,0.0000;3680,0.0000;3676,0.0000;3672,0.0039;3668,0.0000;3664,0.0085;3660,0.0037;3656,0.0000;3652,0.0080;3648,0.0052;3644,0.0027;3640,0.0074;3636,0.0000;3632,0.0106;3628,0.0053;3624,0.0092;3620,0.0083;3616,0.0160;3612,0.0143;3608,0.0067;3604,0.0160;3600,0.0176;3596,0.0198;3592,0.0233;3588,0.0301;3584,0.0387;3580,0.0298;3576,0.0259;3572,0.0331;3568,0.0353;3564,0.0433;3560,0.0447;3556,0.0602;3552,0.0541;3548,0.0633;3544,0.0742;3540,0.0791;3536,0.0882;3532,0.0843;3528,0.1006;3524,0.0998;3520,0.1158;3516,0.1333;3512,0.1267;3508,0.1366;3504,0.1568;3500,0.1639;3496,0.1810;3492,0.1870;3488,0.1959;3484,0.2238;3480,0.2248;3476,0.2446;3472,0.2521;3468,0.2714;3464,0.2782;3460,0.3004;3456,0.3133;3452,0.3310;3448,0.3454;3444,0.3639;3440,0.3740;3436,0.3938;3432,0.4132;3428,0.4227;3424,0.4319;3420,0.4545;3416,0.4663;3412,0.4834;3408,0.4945;3404,0.5097;3400,0.5117;3396,0.5230;3392,0.5311;3388,0.5494;3384,0.5609;3380,0.5755;3376,0.5745;3372,0.5828;3368,0.5888;3364,0.5923;3360,0.5920;3356,0.6040;3352,0.6050;3348,0.5956;3344,0.6001;3340,0.6011;3336,0.6045;3332,0.5966;3328,0.5858;3324,0.5805;3320,0.5729;3316,0.5597;3312,0.5487;3308,0.5343;3304,0.5363;3300,0.5188;3296,0.5110;3292,0.4976;3288,0.4804;3284,0.4590;3280,0.4501;3276,0.4397;3272,0.4144;3268,0.4086;3264,0.3942;3260,0.3745;3256,0.3709;3252,0.3427;3248,0.3291;3244,0.3098;3240,0.2988;3236,0.2839;3232,0.2780;3228,0.2632;3224,0.2449;3220,0.2316;3216,0.2099;3212,0.1983;3208,0.1880;3204,0.1708;3200,0.1688;3196,0.1573;3192,0.1455;3188,0.1321;3184,0.1243;3180,0.1141;3176,0.1086;3172,0.1105;3168,0.0939;3164,0.0778;3160,0.0686;3156,0.0606;3152,0.0631;3148,0.0521;3144,0.0585;3140,0.0472;3136,0.0431;3132,0.0307;3128,0.0422;3124,0.0365;3120,0.0297;3116,0.0283;3112,0.0220;3108,0.0208;3104,0.0221;3100,0.0224;3096,0.0186;3092,0.0066;3088,0.0127;3084,0.0106;3080,0.0137;3076,0.0133;3072,0.0131;3068,0.0008;3064,0.0037;3060,0.0069;3056,0.0041;3052,0.0039;3048,0.0043;3044,0.0142;3040,0.0117;3036,0.0054;3032,0.0041;3028,0.0000;3024,0.0002;3020,0.0000;3016,0.0061;3012,0.0004;3008,0.0000;3004,0.0071;3000,0.0082;2996,0.0235;2992,0.0592;2988,0.1383;2984,0.2588;2980,0.3800;2976,0.4369;2972,0.4262;2968,0.3202;2964,0.1953;2960,0.0990;2956,0.0367;2952,0.0166;2948,0.0336;2944,0.0804;2940,0.1744;2936,0.2905;2932,0.3890;2928,0.3909;2924,0.2934;2920,0.1645;2916,0.0761;2912,0.0250;2908,0.0019;2904,0.0000;2900,0.0056;2896,0.0177;2892,0.0668;2888,0.1497;2884,0.2541;2880,0.2994;2876,0.2590;2872,0.1466;2868,0.0591;2864,0.0185;2860,0.0001;2856,0.0059;2852,0.0018;2848,0.0003;2844,0.0117;2840,0.0022;2836,0.0000;2832,0.0000;2828,0.0000;2824,0.0081;2820,0.0000;2816,0.0000;2812,0.0000;2808,0.0000;2804,0.0069;2800,0.0000;2796,0.0000;2792,0.0050;2788,0.0020;2784,0.0000;2780,0.0000;2776,0.0033;2772,0.0000;2768,0.0061;2764,0.0000;2760,0.0046;2756,0.0033;2752,0.0017;2748,0.0000;2744,0.0000;2740,0.0012;2736,0.0000;2732,0.0000;2728,0.0000;2724,0.0036;2720,0.0000;2716,0.0070;2712,0.0008;2708,0.0080;2704,0.0086;2700,0.0004;2696,0.0080;2692,0.0009;2688,0.0000;2684,0.0009;2680,0.0078;2676,0.0072;2672,0.0000;2668,0.0063;2664,0.0000;2660,0.0021;2656,0.0003;2652,0.0000;2648,0.0009;2644,0.0000;2640,0.0086;2636,0.0017;2632,0.0027;2628,0.0029;2624,0.0000;2620,0.0079;2616,0.0048;2612,0.0000;2608,0.0141;2604,0.0073;2600,0.0000;2596,0.0005;2592,0.0097;2588,0.0000;2584,0.0000;2580,0.0000;2576,0.0000;2572,0.0000;2568,0.0014;2564,0.0000;2560,0.0000;2556,0.0000;2552,0.0085;2548,0.0000;2544,0.0132;2540,0.0000;2536,0.0023;2532,0.0118;2528,0.0000;2524,0.0000;2520,0.0000;2516,0.0000;2512,0.0133;2508,0.0000;2504,0.0000;2500,0.0000;2496,0.0040;2492,0.0135;2488,0.0021;2484,0.0021;2480,0.0000;2476,0.0101;2472,0.0000;2468,0.0038;2464,0.0019;2460,0.0008;2456,0.0006;2452,0.0045;2448,0.0000;2444,0.0079;2440,0.0006;2436,0.0000;2432,0.0003;2428,0.0000;2424,0.0033;2420,0.0000;2416,0.0019;2412,0.0109;2408,0.0021;2404,0.0000;2400,0.0000;2396,0.0000;2392,0.0067;2388,0.0000;2384,0.0000;2380,0.0000;2376,0.0006;2372,0.0084;2368,0.0000;2364,0.0000;2360,0.0000;2356,0.0000;2352,0.0033;2348,0.0072;2344,0.0000;2340,0.0044;2336,0.0000;2332,0.0014;2328,0.0000;2324,0.0076;2320,0.0000;2316,0.0000;2312,0.0025;2308,0.0000;2304,0.0029;2300,0.0000;2296,0.0000;2292,0.0017;2288,0.0062;2284,0.0004;2280,0.0000;2276,0.0000;2272,0.0004;2268,0.0044;2264,0.0040;2260,0.0000;2256,0.0060;2252,0.0059;2248,0.0000;2244,0.0049;2240,0.0000;2236,0.0000;2232,0.0000;2228,0.0000;2224,0.0057;2220,0.0045;2216,0.0000;2212,0.0051;2208,0.0000;2204,0.0000;2200,0.0034;2196,0.0000;2192,0.0000;2188,0.0000;2184,0.0006;2180,0.0037;2176,0.0000;2172,0.0000;2168,0.0000;2164,0.0029;2160,0.0000;2156,0.0053;2152,0.0000;2148,0.0001;2144,0.0025;2140,0.0050;2136,0.0049;2132,0.0000;2128,0.0108;2124,0.0018;2120,0.0030;2116,0.0000;2112,0.0000;2108,0.0051;2104,0.0000;2100,0.0056;2096,0.0017;2092,0.0000;2088,0.0066;2084,0.0016;2080,0.0070;2076,0.0035;2072,0.0000;2068,0.0000;2064,0.0000;2060,0.0026;2056,0.0000;2052,0.0000;2048,0.0019;2044,0.0014;2040,0.0000;2036,0.0000;2032,0.0000;2028,0.0046;2024,0.0041;2020,0.0087;2016,0.0036;2012,0.0000;2008,0.0008;2004,0.0000;2000,0.0000;1996,0.0039;1992,0.0000;1988,0.0036;1984,0.0066;1980,0.0000;1976,0.0062;1972,0.0021;1968,0.0000;1964,0.0000;1960,0.0106;1956,0.0000;1952,0.0000;1948,0.0026;1944,0.0093;1940,0.0000;1936,0.0000;1932,0.0003;1928,0.0000;1924,0.0000;1920,0.0000;1916,0.0000;1912,0.0000;1908,0.0000;1904,0.0096;1900,0.0079;1896,0.0000;1892,0.0061;1888,0.0000;1884,0.0037;1880,0.0012;1876,0.0000;1872,0.0002;1868,0.0000;1864,0.0032;1860,0.0000;1856,0.0000;1852,0.0057;1848,0.0028;1844,0.0043;1840,0.0064;1836,0.0000;1832,0.0000;1828,0.0000;1824,0.0000;1820,0.0000;1816,0.0000;1812,0.0036;1808,0.0005;1804,0.0000;1800,0.0000;1796,0.0000;1792,0.0000;1788,0.0000;1784,0.0008;1780,0.0035;1776,0.0049;1772,0.0000;1768,0.0000;1764,0.0000;1760,0.0000;1756,0.0017;1752,0.0000;1748,0.0032;1744,0.0059;1740,0.0000;1736,0.0073;1732,0.0000;1728,0.0000;1724,0.0019;1720,0.0000;1716,0.0000;1712,0.0000;1708,0.0000;1704,0.0000;1700,0.0042;1696,0.0000;1692,0.0009;1688,0.0005;1684,0.0014;1680,0.0000;1676,0.0000;1672,0.0000;1668,0.0000;1664,0.0000;1660,0.0000;1656,0.0000;1652,0.0020;1648,0.0000;1644,0.0141;1640,0.0000;1636,0.0031;1632,0.0072;1628,0.0081;1624,0.0009;1620,0.0026;1616,0.0000;1612,0.0000;1608,0.0045;1604,0.0000;1600,0.0000;1596,0.0000;1592,0.0029;1588,0.0008;1584,0.0027;1580,0.0019;1576,0.0069;1572,0.0008;1568,0.0000;1564,0.0014;1560,0.0054;1556,0.0015;1552,0.0000;1548,0.0000;1544,0.0083;1540,0.0022;1536,0.0000;1532,0.0000;1528,0.0019;1524,0.0002;1520,0.0001;1516,0.0056;1512,0.0026;1508,0.0044;1504,0.0000;1500,0.0000;1496,0.0000;1492,0.0000;1488,0.0000;1484,0.0000;1480,0.0022;1476,0.0000;1472,0.0105;1468,0.0000;1464,0.0138;1460,0.0467;1456,0.1016;1452,0.1434;1448,0.1387;1444,0.1021;1440,0.0400;1436,0.0209;1432,0.0047;1428,0.0016;1424,0.0000;1420,0.0040;1416,0.0047;1412,0.0020;1408,0.0000;1404,0.0000;1400,0.0031;1396,0.0007;1392,0.0050;1388,0.0020;1384,0.0006;1380,0.0002;1376,0.0000;1372,0.0000;1368,0.0106;1364,0.0000;1360,0.0036;1356,0.0061;1352,0.0074;1348,0.0000;1344,0.0019;1340,0.0000;1336,0.0000;1332,0.0000;1328,0.0027;1324,0.0039;1320,0.0000;1316,0.0000;1312,0.0023;1308,0.0000;1304,0.0060;1300,0.0000;1296,0.0000;1292,0.0000;1288,0.0095;1284,0.0030;1280,0.0034;1276,0.0007;1272,0.0081;1268,0.0000;1264,0.0000;1260,0.0000;1256,0.0000;1252,0.0000;1248,0.0011;1244,0.0000;1240,0.0000;1236,0.0025;1232,0.0094;1228,0.0075;1224,0.0000;1220,0.0000;1216,0.0040;1212,0.0054;1208,0.0011;1204,0.0056;1200,0.0049;1196,0.0052;1192,0.0078;1188,0.0000;1184,0.0000;1180,0.0000;1176,0.0000;1172,0.0000;1168,0.0000;1164,0.0057;1160,0.0000;1156,0.0070;1152,0.0000;1148,0.0000;1144,0.0000;1140,0.0074;1136,0.0000;1132,0.0000;1128,0.0000;1124,0.0018;1120,0.0008;1116,0.0010;1112,0.0037;1108,0.0000;1104,0.0130;1100,0.0046;1096,0.0041;1092,0.0000;1088,0.0064;1084,0.0000;1080,0.0113;1076,0.0217;1072,0.0438;1068,0.0844;1064,0.1540;1060,0.2314;1056,0.2964;1052,0.3482;1048,0.3475;1044,0.2979;1040,0.2245;1036,0.1474;1032,0.0766;1028,0.0432;1024,0.0187;1020,0.0000;1016,0.0018;1012,0.0000;1008,0.0000;1004,0.0000;1000,0.0014;996,0.0050;992,0.0000;988,0.0047;984,0.0000;980,0.0000;976,0.0000;972,0.0000;968,0.0004;964,0.0033;960,0.0000;956,0.0078;952,0.0000;948,0.0009;944,0.0000;940,0.0000;936,0.0027;932,0.0059;928,0.0068;924,0.0016;920,0.0000;916,0.0104;912,0.0025;908,0.0009;904,0.0000;900,0.0000;896,0.0047;892,0.0055;888,0.0067;884,0.0002;880,0.0108;876,0.0000;872,0.0003;868,0.0019;864,0.0044;860,0.0005;856,0.0050;852,0.0028;848,0.0000;844,0.0022;840,0.0066;836,0.0006;832,0.0000;828,0.0000;824,0.0083;820,0.0000;816,0.0000;812,0.0011;808,0.0000;804,0.0000;800,0.0003;796,0.0000;792,0.0024;788,0.0017;784,0.0016;780,0.0000;776,0.0013;772,0.0008;768,0.0000;764,0.0058;760,0.0000;756,0.0032;752,0.0000;748,0.0000;744,0.0024;740,0.0000;736,0.0000;732,0.0000;728,0.0000;724,0.0078;720,0.0066;716,0.0000;712,0.0060;708,0.0000;704,0.0024;700,0.0000;696,0.0000;692,0.0000;688,0.0087;684,0.0000;680,0.0000;676,0.0000;672,0.0000;668,0.0010;664,0.0026;660,0.0000;656,0.0110;652,0.0000;648,0.0000;644,0.0000;640,0.0057;636,0.0000;632,0.0005;628,0.0000;624,0.0022;620,0.0000;616,0.0006;612,0.0000;608,0.0004;604,0.0000;600,0.0000;596,0.0000;592,0.0000;588,0.0000;584,0.0010;580,0.0000;576,0.0098;572,0.0000;568,0.0000;564,0.0000;560,0.0056;556,0.0074;552,0.0089;548,0.0000;544,0.0000;540,0.0000;536,0.0027;532,0.0090;528,0.0044;524,0.0000;520,0.0000;516,0.0021;512,0.0000;508,0.0046;504,0.0000;500,0.0000;496,0.0086;492,0.0000;488,0.0030;484,0.0038;480,0.0003;476,0.0000;472,0.0062;468,0.0000;464,0.0000;460,0.0000;456,0.0000;452,0.0000;448,0.0000;444,0.0008;440,0.0060;436,0.0000;432,0.0016;428,0.0000;424,0.0025;420,0.0000;416,0.0119;412,0.0065;408,0.0000;404,0.0000;400,0.0007";
+
+/* ============================================================
+   5.5 IMAGE DIGITIZATION (ported from spectre/ingestion/image_digitizer.py,
+   validated in Node against the Python implementation on the same test
+   image -- both recover the curve with ~0.003 mean absolute error against
+   ground truth)
+   ============================================================ */
+function loadImageAsPixelData(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      resolve({width: canvas.width, height: canvas.height, data: imageData.data});
+    };
+    img.onerror = ()=>reject(new Error("Could not load image file."));
+    img.src = URL.createObjectURL(file);
+  });
+}
+function makeGetPixel(pixelData){
+  const { width, data } = pixelData;
+  return (x, y)=>{
+    const idx = (width*y + x) << 2;
+    return [data[idx], data[idx+1], data[idx+2]];
+  };
+}
+function detectPlotBBox(width, height, getPixel, minLineFrac=0.5){
+  const rowDarkFrac = new Array(height).fill(0);
+  const colDarkFrac = new Array(width).fill(0);
+  for(let y=0;y<height;y++){
+    let count=0;
+    for(let x=0;x<width;x++){ const [r,g,b]=getPixel(x,y); if((r+g+b)/3 < 128) count++; }
+    rowDarkFrac[y]=count/width;
+  }
+  for(let x=0;x<width;x++){
+    let count=0;
+    for(let y=0;y<height;y++){ const [r,g,b]=getPixel(x,y); if((r+g+b)/3 < 128) count++; }
+    colDarkFrac[x]=count/height;
+  }
+  const rowCandidates=[]; for(let y=0;y<height;y++) if(rowDarkFrac[y]>minLineFrac) rowCandidates.push(y);
+  const colCandidates=[]; for(let x=0;x<width;x++) if(colDarkFrac[x]>minLineFrac) colCandidates.push(x);
+  if(rowCandidates.length<2 || colCandidates.length<2){
+    throw new Error("Could not detect a rectangular axis frame -- this image needs a visible boxed axis frame.");
+  }
+  return { left: Math.min(...colCandidates), top: Math.min(...rowCandidates),
+           right: Math.max(...colCandidates), bottom: Math.max(...rowCandidates) };
+}
+function detectCurveColor(getPixel, bbox){
+  const { left, top, right, bottom } = bbox;
+  let counts = new Map(), colorfulCount = 0;
+  for(let y=top;y<bottom;y++){
+    for(let x=left;x<right;x++){
+      const [r,g,b]=getPixel(x,y);
+      const maxc=Math.max(r,g,b), minc=Math.min(r,g,b);
+      const isGrayish=(maxc-minc)<20, isNearWhite=minc>230;
+      if(!isGrayish && !isNearWhite){
+        colorfulCount++;
+        const key=`${r},${g},${b}`;
+        counts.set(key,(counts.get(key)||0)+1);
+      }
+    }
+  }
+  if(colorfulCount<=200){
+    counts = new Map();
+    for(let y=top;y<bottom;y++){
+      for(let x=left;x<right;x++){
+        const [r,g,b]=getPixel(x,y);
+        if(Math.max(r,g,b)<100){
+          const key=`${r},${g},${b}`;
+          counts.set(key,(counts.get(key)||0)+1);
+        }
+      }
+    }
+  }
+  let bestKey=null, bestCount=-1;
+  for(const [key,count] of counts){ if(count>bestCount){ bestCount=count; bestKey=key; } }
+  if(!bestKey) throw new Error("Could not find a distinguishable curve color inside the plot area.");
+  return bestKey.split(",").map(Number);
+}
+function extractCurvePixels(getPixel, bbox, curveColor, tolerance=40){
+  const { left, top, right, bottom } = bbox;
+  const nCols = right-left, nRows = bottom-top;
+  const [cr,cg,cb] = curveColor;
+  const rowOfCol = new Array(nCols).fill(NaN);
+  for(let c=0;c<nCols;c++){
+    let sum=0, n=0;
+    const x=left+c;
+    for(let ry=0;ry<nRows;ry++){
+      const y=top+ry;
+      const [r,g,b]=getPixel(x,y);
+      const dist=Math.sqrt((r-cr)**2+(g-cg)**2+(b-cb)**2);
+      if(dist<=tolerance){ sum+=ry; n++; }
+    }
+    if(n>0) rowOfCol[c]=sum/n;
+  }
+  return rowOfCol;
+}
+function pixelsToSpectrum(rowOfCol, bbox, xRange, yRange){
+  const { top, bottom } = bbox;
+  const nCols = rowOfCol.length;
+  const [xMin,xMax] = xRange, [yMin,yMax] = yRange;
+  const bboxH = bottom-top;
+  const validIdx=[]; for(let i=0;i<nCols;i++) if(!Number.isNaN(rowOfCol[i])) validIdx.push(i);
+  if(validIdx.length < nCols*0.5){
+    throw new Error(`Only recovered the curve in ${validIdx.length}/${nCols} columns -- curve color/tolerance is probably wrong for this image.`);
+  }
+  const rowFilled=new Array(nCols);
+  let vi=0;
+  for(let i=0;i<nCols;i++){
+    if(!Number.isNaN(rowOfCol[i])){ rowFilled[i]=rowOfCol[i]; continue; }
+    while(vi<validIdx.length-1 && validIdx[vi+1]<i) vi++;
+    const i0=validIdx[Math.min(vi,validIdx.length-1)], i1=validIdx[Math.min(vi+1,validIdx.length-1)];
+    if(i0===i1){ rowFilled[i]=rowOfCol[i0]; continue; }
+    const t=(i-i0)/(i1-i0);
+    rowFilled[i]=rowOfCol[i0]+t*(rowOfCol[i1]-rowOfCol[i0]);
+  }
+  const x=new Array(nCols), y=new Array(nCols);
+  for(let i=0;i<nCols;i++){
+    x[i]=xMin+(i/(nCols-1))*(xMax-xMin);
+    y[i]=yMax-(rowFilled[i]/(bboxH-1))*(yMax-yMin);
+  }
+  return {x,y};
+}
+async function digitizePlotImage(file, xRange, yRange){
+  const pixelData = await loadImageAsPixelData(file);
+  const getPixel = makeGetPixel(pixelData);
+  const bbox = detectPlotBBox(pixelData.width, pixelData.height, getPixel);
+  const color = detectCurveColor(getPixel, bbox);
+  const rowOfCol = extractCurvePixels(getPixel, bbox, color, 40);
+  let {x,y} = pixelsToSpectrum(rowOfCol, bbox, xRange, yRange);
+  if(x[0] < x[x.length-1]){ x = x.slice().reverse(); y = y.slice().reverse(); } // match descending convention
+  return {x,y};
+}
+
+// Calibration profiles (bbox + curve color + axis range), saved per-browser
+// via localStorage so a prof only enters the axis range once per instrument.
+function getCalibrationProfiles(){
+  try{ return JSON.parse(localStorage.getItem('spectre_calibrations')||'{}'); }catch(e){ return {}; }
+}
+function saveCalibrationProfile(name, profile){
+  const all = getCalibrationProfiles();
+  all[name] = profile;
+  localStorage.setItem('spectre_calibrations', JSON.stringify(all));
+}
+
+/* ============================================================
+   5.6 CNN INFERENCE (ONNX Runtime Web -- Phase 3, exported from
+   spectre/models/cnn.py via scripts/export_onnx.py)
+   ============================================================ */
+const CNN_GRID = (()=>{ const g=[]; for(let w=4000; w>=400; w--) g.push(w); return g; })(); // matches spectre.synthetic.generator.GRID
+let _cnnSession = null, _cnnLabels = null;
+
+async function loadCnnModel(){
+  if(_cnnSession) return { session: _cnnSession, labels: _cnnLabels };
+  const [session, labelsResp] = await Promise.all([
+    ort.InferenceSession.create('cnn_ir.onnx'),
+    fetch('cnn_ir_labels.json').then(r=>r.json()),
+  ]);
+  _cnnSession = session;
+  _cnnLabels = labelsResp.labels;
+  return { session, labels: _cnnLabels };
+}
+function resampleToGrid(x, y, grid){
+  // Ensure ascending x for interpolation (mirrors preprocessing/grid.py's np.interp usage,
+  // which requires ascending x and fills 0.0 strictly *outside* the measured range).
+  let xAsc = x, yAsc = y;
+  if(x[0] > x[x.length-1]){ xAsc = x.slice().reverse(); yAsc = y.slice().reverse(); }
+  const n = xAsc.length;
+  const gridAsc = grid.slice().reverse(); // grid passed in descending (4000 -> 400)
+  const out = new Array(gridAsc.length);
+  let j = 0;
+  for(let i=0;i<gridAsc.length;i++){
+    const gx = gridAsc[i];
+    if(gx < xAsc[0]){ out[i] = 0; continue; }
+    if(gx > xAsc[n-1]){ out[i] = 0; continue; }
+    while(j < n-2 && xAsc[j+1] < gx) j++;
+    const x0=xAsc[j], x1=xAsc[j+1], y0=yAsc[j], y1=yAsc[j+1];
+    const t = x1===x0 ? 0 : (gx-x0)/(x1-x0);
+    out[i] = y0 + t*(y1-y0);
+  }
+  return out.reverse(); // back to descending, matching grid's original order
+}
+async function cnnPredict(x, y){
+  const { session, labels } = await loadCnnModel();
+  let resampled = resampleToGrid(x, y, CNN_GRID);
+  const maxVal = Math.max(...resampled) || 1;
+  resampled = resampled.map(v=>v/maxVal);
+  const tensor = new ort.Tensor('float32', Float32Array.from(resampled), [1, resampled.length]);
+  const output = await session.run({ spectrum: tensor });
+  const logits = output.logits.data;
+  const preds = [];
+  for(let i=0;i<labels.length;i++){
+    const prob = 1/(1+Math.exp(-logits[i]));
+    if(prob >= 0.5) preds.push({ functional_group: labels[i], confidence: prob, evidence: [], matched_rules: ["CNN prediction (Phase 3) — no peak-level evidence, cross-check against the rule engine for interpretability"] });
+  }
+  preds.sort((a,b)=>b.confidence-a.confidence);
+  return preds;
+}
+
+/* ============================================================
+   7. PIPELINE
+   ============================================================ */
+async function runPipeline(x, y, model){
+  let yc = correctBaseline(y);
+  yc = smooth(yc);
+  yc = normalize(yc);
+  const peaks = detectPeaks(x, yc, {height:0.05, prominence:0.03, distance:15});
+
+  let predictions;
+  if(model === 'cnn'){
+    predictions = await cnnPredict(x, yc); // CNN resamples/renormalizes onto its own training grid internally
+  } else {
+    predictions = classify(peaks);
+  }
+  return {x, y:yc, peaks, predictions};
+}
+
+/* ============================================================
+   8. RENDERING
+   ============================================================ */
+function drawPlot(x, y, peaks){
+  const canvas = document.getElementById('plotCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 900, cssH = 280;
+  canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const padL=40, padR=14, padT=14, padB=28;
+  const plotW=cssW-padL-padR, plotH=cssH-padT-padB;
+  const xMax=Math.max(...x), xMin=Math.min(...x);
+  const yMax=Math.max(...y)||1;
+
+  function px(xv){ return padL + (xMax-xv)/(xMax-xMin)*plotW; } // IR convention: high wavenumber left
+  function py(yv){ return padT + (1-yv/yMax)*plotH; }
+
+  // gridlines / axis
+  ctx.strokeStyle="#232323"; ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let gx=4000; gx>=500; gx-=500){
+    if(gx<xMin || gx>xMax) continue;
+    const X=px(gx);
+    ctx.moveTo(X,padT); ctx.lineTo(X,padT+plotH);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle="#8a8a83"; ctx.font="10px monospace"; ctx.textAlign="center";
+  for(let gx=4000; gx>=500; gx-=500){
+    if(gx<xMin || gx>xMax) continue;
+    ctx.fillText(gx, px(gx), cssH-10);
+  }
+
+  // spectrum line
+  ctx.strokeStyle="#e8e8e3"; ctx.lineWidth=1.2;
+  ctx.beginPath();
+  for(let i=0;i<x.length;i++){
+    const X=px(x[i]), Y=py(y[i]);
+    if(i===0) ctx.moveTo(X,Y); else ctx.lineTo(X,Y);
+  }
+  ctx.stroke();
+
+  // peak markers
+  ctx.strokeStyle="#c8ff3d"; ctx.setLineDash([3,3]); ctx.lineWidth=1;
+  ctx.fillStyle="#c8ff3d"; ctx.font="9px monospace"; ctx.textAlign="left";
+  for(const p of peaks){
+    const X=px(p.wavenumber);
+    ctx.beginPath(); ctx.moveTo(X,padT); ctx.lineTo(X,padT+plotH); ctx.stroke();
+    ctx.save();
+    ctx.translate(X+3, padT+plotH-4);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(p.wavenumber.toFixed(0), 0, 0);
+    ctx.restore();
+  }
+  ctx.setLineDash([]);
+}
+
+function renderResults(result, meta){
+  document.getElementById('results').style.display='block';
+  drawPlot(result.x, result.y, result.peaks);
+
+  const tbody = document.querySelector('#peakTable tbody');
+  tbody.innerHTML='';
+  if(result.peaks.length===0){
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-note">No peaks detected above threshold.</td></tr>';
+  }
+  for(const p of result.peaks){
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${p.wavenumber.toFixed(1)}</td><td>${p.intensity.toFixed(2)}</td><td>${p.width.toFixed(1)}</td><td>${p.shape}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  const predDiv = document.getElementById('predictions');
+  predDiv.innerHTML='';
+  if(result.predictions.length===0){
+    predDiv.innerHTML = '<div class="empty-note">No functional groups confidently matched — try a cleaner spectrum or check peak thresholds.</div>';
+  }
+  for(const pred of result.predictions){
+    const el = document.createElement('div');
+    el.className='pred';
+    const pct = Math.round(pred.confidence*100);
+    el.innerHTML = `
+      <div class="pred-head">
+        <div class="pred-name">${pred.functional_group}</div>
+        <div class="pred-conf">${pct}%</div>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;"></div></div>
+      <ul class="notes">${pred.matched_rules.map(n=>`<li>${n}</li>`).join('')}</ul>
+    `;
+    predDiv.appendChild(el);
+  }
+
+  logSubmission(meta, result);
+}
+
+/* ============================================================
+   9. LOGGING — local storage always; Google Sheet if configured
+   ============================================================ */
+function getLocalLog(){
+  try{ return JSON.parse(localStorage.getItem('spectre_log')||'[]'); }catch(e){ return []; }
+}
+function saveLocalLog(arr){ localStorage.setItem('spectre_log', JSON.stringify(arr)); }
+function updateLogCount(){ document.getElementById('logCount').textContent = getLocalLog().length; }
+
+function logSubmission(meta, result){
+  const top = result.predictions[0];
+  const entry = {
+    timestamp: new Date().toISOString(),
+    name: meta.name,
+    institute: meta.institute,
+    source: meta.source,
+    peakCount: result.peaks.length,
+    topGroup: top ? top.functional_group : "",
+    topConfidence: top ? Math.round(top.confidence*100) : ""
+  };
+  const log = getLocalLog();
+  log.push(entry);
+  saveLocalLog(log);
+  updateLogCount();
+
+  if(SHEET_ENDPOINT){
+    fetch(SHEET_ENDPOINT, {
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify(entry)
+    }).catch(()=>{ /* fails silently — local log still has it */ });
+  }
+}
+
+function downloadLocalLogCsv(){
+  const log = getLocalLog();
+  if(log.length===0){ alert('No submissions logged in this browser yet.'); return; }
+  const header = ['timestamp','name','institute','source','peakCount','topGroup','topConfidence'];
+  const rows = [header.join(',')].concat(
+    log.map(r => header.map(h => `"${String(r[h]??'').replace(/"/g,'""')}"`).join(','))
+  );
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='spectre_submissions_log.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ============================================================
+   10. UI WIRING
+   ============================================================ */
+let currentSpectrum = null; // {x,y,source}
+
+const profNameEl = document.getElementById('profName');
+const instituteEl = document.getElementById('institute');
+const otherInstituteField = document.getElementById('otherInstituteField');
+const otherInstituteEl = document.getElementById('otherInstitute');
+const runBtn = document.getElementById('runBtn');
+const statusLine = document.getElementById('statusLine');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const dzText = document.getElementById('dzText');
+
+instituteEl.addEventListener('change', ()=>{
+  otherInstituteField.style.display = instituteEl.value === 'Other' ? 'flex' : 'none';
+  updateRunEnabled();
+});
+profNameEl.addEventListener('input', updateRunEnabled);
+otherInstituteEl.addEventListener('input', updateRunEnabled);
+
+function currentInstitute(){
+  if(instituteEl.value === 'Other') return otherInstituteEl.value.trim();
+  return instituteEl.value;
+}
+
+const imageCalibrationDiv = document.getElementById('imageCalibration');
+const calibProfileEl = document.getElementById('calibProfile');
+const xMinEl = document.getElementById('xMin'), xMaxEl = document.getElementById('xMax');
+const yMinEl = document.getElementById('yMin'), yMaxEl = document.getElementById('yMax');
+const calibNameEl = document.getElementById('calibName');
+const calibStatus = document.getElementById('calibStatus');
+const modelSelectEl = document.getElementById('modelSelect');
+
+let currentImageFile = null; // set when the uploaded/dropped file is a PNG/JPG, else null
+
+function refreshCalibrationDropdown(){
+  const profiles = getCalibrationProfiles();
+  calibProfileEl.innerHTML = '<option value="">— None / enter axis range manually —</option>';
+  for(const name of Object.keys(profiles)){
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    calibProfileEl.appendChild(opt);
+  }
+}
+refreshCalibrationDropdown();
+
+calibProfileEl.addEventListener('change', ()=>{
+  const name = calibProfileEl.value;
+  const usingProfile = name.length>0;
+  document.getElementById('axisRangeFields').style.display = usingProfile ? 'none' : 'flex';
+  calibNameEl.closest('.field').style.display = usingProfile ? 'none' : 'flex';
+  if(usingProfile){
+    const p = getCalibrationProfiles()[name];
+    xMinEl.value = p.xMin; xMaxEl.value = p.xMax; yMinEl.value = p.yMin; yMaxEl.value = p.yMax;
+  }
+  updateRunEnabled();
+});
+
+function haveValidAxisRange(){
+  if(!currentImageFile) return true; // not an image upload -- irrelevant
+  const vals = [xMinEl.value, xMaxEl.value, yMinEl.value, yMaxEl.value].map(parseFloat);
+  return vals.every(v=>!Number.isNaN(v));
+}
+
+function updateRunEnabled(){
+  const ok = profNameEl.value.trim().length>0 && currentInstitute().length>0
+    && currentSpectrum !== null && haveValidAxisRange();
+  runBtn.disabled = !ok;
+}
+[xMinEl,xMaxEl,yMinEl,yMaxEl].forEach(el=>el.addEventListener('input', updateRunEnabled));
+
+dropzone.addEventListener('click', ()=>fileInput.click());
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', ()=>dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e=>{
+  if(e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function isImageFile(file){
+  return /\.(png|jpe?g)$/i.test(file.name);
+}
+
+function handleFile(file){
+  if(isImageFile(file)){
+    currentImageFile = file;
+    currentSpectrum = { pendingImage: true, source: file.name }; // real x,y filled in at run time after digitizing
+    imageCalibrationDiv.style.display = 'block';
+    dropzone.classList.add('has-file');
+    dzText.innerHTML = `<strong>${file.name}</strong> loaded (plot image)<br><span style="color:var(--text-faint)">Click to choose a different file</span>`;
+    statusLine.textContent=''; statusLine.className='status-line';
+    updateRunEnabled();
+    return;
+  }
+
+  currentImageFile = null;
+  imageCalibrationDiv.style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const {x,y} = parseDelimited(reader.result);
+      currentSpectrum = {x,y,source:file.name};
+      dropzone.classList.add('has-file');
+      dzText.innerHTML = `<strong>${file.name}</strong> loaded — ${x.length} data points<br><span style="color:var(--text-faint)">Click to choose a different file</span>`;
+      statusLine.textContent=''; statusLine.className='status-line';
+      updateRunEnabled();
+    }catch(err){
+      statusLine.textContent = 'Error: '+err.message;
+      statusLine.className='status-line err';
+      currentSpectrum=null; updateRunEnabled();
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById('exAcid').addEventListener('click', ()=>{
+  currentImageFile = null;
+  imageCalibrationDiv.style.display = 'none';
+  const {x,y} = parseEmbedded(EXAMPLE_ACID);
+  currentSpectrum = {x,y,source:'example: carboxylic-acid-like'};
+  dropzone.classList.add('has-file');
+  dzText.innerHTML = `<strong>Example loaded</strong> — carboxylic-acid-like spectrum<br><span style="color:var(--text-faint)">Click to choose a file instead</span>`;
+  updateRunEnabled();
+});
+document.getElementById('exAlcohol').addEventListener('click', ()=>{
+  currentImageFile = null;
+  imageCalibrationDiv.style.display = 'none';
+  const {x,y} = parseEmbedded(EXAMPLE_ALCOHOL);
+  currentSpectrum = {x,y,source:'example: alcohol-like'};
+  dropzone.classList.add('has-file');
+  dzText.innerHTML = `<strong>Example loaded</strong> — alcohol-like spectrum<br><span style="color:var(--text-faint)">Click to choose a file instead</span>`;
+  updateRunEnabled();
+});
+
+runBtn.addEventListener('click', async ()=>{
+  if(!currentSpectrum) return;
+  statusLine.textContent = 'Running pipeline...'; statusLine.className='status-line';
+  runBtn.disabled = true;
+  try{
+    let x, y;
+    if(currentImageFile){
+      statusLine.textContent = 'Digitizing plot image...';
+      const xRange = [parseFloat(xMinEl.value), parseFloat(xMaxEl.value)];
+      const yRange = [parseFloat(yMinEl.value), parseFloat(yMaxEl.value)];
+      const digitized = await digitizePlotImage(currentImageFile, xRange, yRange);
+      x = digitized.x; y = digitized.y;
+
+      const profileName = calibNameEl.value.trim();
+      if(profileName && !calibProfileEl.value){
+        saveCalibrationProfile(profileName, { xMin:xRange[0], xMax:xRange[1], yMin:yRange[0], yMax:yRange[1] });
+        refreshCalibrationDropdown();
+      }
+    } else {
+      x = currentSpectrum.x; y = currentSpectrum.y;
+    }
+
+    const model = modelSelectEl.value;
+    if(model === 'cnn') statusLine.textContent = 'Loading CNN model...';
+    const result = await runPipeline(x, y, model);
+
+    renderResults(result, {
+      name: profNameEl.value.trim(),
+      institute: currentInstitute(),
+      source: currentSpectrum.source + (model==='cnn' ? ' (CNN)' : ' (rule engine)')
+    });
+    statusLine.textContent = `Done — logged as ${profNameEl.value.trim()} · ${currentInstitute()}`;
+    statusLine.className='status-line ok';
+    document.getElementById('results').scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(err){
+    statusLine.textContent = 'Error: '+err.message;
+    statusLine.className='status-line err';
+  }finally{
+    updateRunEnabled();
+  }
+});
+
+document.getElementById('downloadLog').addEventListener('click', downloadLocalLogCsv);
+
+updateLogCount();
+</script>
+</body>
+</html>

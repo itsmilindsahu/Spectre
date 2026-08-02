@@ -1,0 +1,14 @@
+{
+  "labels": [
+    "Alcohol / Phenol",
+    "Alkane",
+    "Alkene",
+    "Alkene / Aromatic ring",
+    "Alkyne / Nitrile",
+    "Amine / Amide",
+    "Carbonyl (Ketone / Aldehyde / Ester / Carboxylic Acid)",
+    "Carboxylic Acid",
+    "Terminal Alkyne"
+  ],
+  "n_points": 3601
+}
