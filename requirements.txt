@@ -1,0 +1,13 @@
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+pytest>=7.4
+
+# Optional, recommended for full JCAMP-DX spec support (ASDF-compressed files):
+# jcamp>=1.2.2
+
+# Future phases:
+# scikit-learn      # Phase 2: classical ML models
+# torch             # Phase 3: 1D-CNN deep learning model
+# rdkit             # Phase 3+: SMARTS-based auto-labeling from SMILES
