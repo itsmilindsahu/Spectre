@@ -6,9 +6,14 @@ a browser, no install required.
 
 ## Deploy (GitHub Pages)
 
+<<<<<<< HEAD
 1. Clone the repository from `https://github.com/itsmilindsahu/Spectre.git` and publish it to GitHub Pages.
 2. The repository root now includes an `index.html` that redirects to the app under `web/`, so the site opens at `https://itsmilindsahu.github.io/Spectre/` without the `/web/` folder in the URL.
 3. No build step or dependencies are required.
+=======
+1. Push this `web/` folder (or just `index.html`) into your GitHub Pages repo.
+2. GitHub Pages serves `index.html` directly — no build step, no dependencies.
+>>>>>>> 85814506aca72b1d0689f58aaf9bcf6ae204c656
 
 ## What it does
 
