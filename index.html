@@ -236,10 +236,16 @@
         <li>Create a new Google Sheet, e.g. <code>Spectre Submissions</code>.</li>
         <li>Open <code>Extensions → Apps Script</code>, delete the placeholder code, and paste in the contents of <code>sheet-logger.gs</code> (shipped alongside this file).</li>
         <li>Click <code>Deploy → New deployment</code>, type = <code>Web app</code>, execute as <code>Me</code>, access = <code>Anyone</code>.</li>
-        <li>Copy the deployment URL and paste it into the <code>SHEET_ENDPOINT</code> constant near the top of the <code>&lt;script&gt;</code> block in this file.</li>
+        <li>Paste the deployment URL below and click <strong>Save endpoint</strong>.</li>
         <li>Re-upload this file to your GitHub Pages repo. Every future submission will silently POST to that sheet in addition to being logged locally.</li>
       </ol>
-      <p>Until <code>SHEET_ENDPOINT</code> is set, the tool works fully — logging just stays local to each visitor's browser.</p>
+      <div class="field" style="margin-top:16px;">
+        <label for="sheetEndpoint">Google Apps Script Web App URL</label>
+        <input type="text" id="sheetEndpoint" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <button class="ghost" id="saveSheetEndpoint" style="margin-top:8px;">Save endpoint</button>
+      <div class="status-line" id="sheetEndpointStatus"></div>
+      <p style="margin-top:10px;">Until a URL is saved, the tool works fully — logging just stays local to each visitor's browser.</p>
     </div>
   </details>
 
@@ -248,10 +254,23 @@
 
 <script>
 /* ============================================================
-   CONFIG — paste your Google Apps Script Web App URL here once
-   deployed (see "Admin setup" above). Leave "" to log locally only.
+   CONFIG — save your Google Apps Script Web App URL below
+   to send submissions to a Google Sheet. Leave blank to log locally only.
    ============================================================ */
-const SHEET_ENDPOINT = "";
+const SHEET_STORAGE_KEY = 'spectre_sheet_endpoint';
+function getStoredSheetEndpoint(){
+  try{ return (localStorage.getItem(SHEET_STORAGE_KEY) || '').trim(); }
+  catch(e){ return ''; }
+}
+function saveStoredSheetEndpoint(endpoint){
+  const value = (endpoint || '').trim();
+  try{
+    if(value){ localStorage.setItem(SHEET_STORAGE_KEY, value); }
+    else{ localStorage.removeItem(SHEET_STORAGE_KEY); }
+  }catch(e){}
+  SHEET_ENDPOINT = value;
+}
+let SHEET_ENDPOINT = getStoredSheetEndpoint();
 
 /* ============================================================
    1. CORRELATION TABLE  (ported from spectre/models/correlation_table.py)
@@ -699,6 +718,22 @@ runBtn.addEventListener('click', ()=>{
 });
 
 document.getElementById('downloadLog').addEventListener('click', downloadLocalLogCsv);
+
+const sheetEndpointEl = document.getElementById('sheetEndpoint');
+const saveSheetEndpointBtn = document.getElementById('saveSheetEndpoint');
+const sheetEndpointStatus = document.getElementById('sheetEndpointStatus');
+
+sheetEndpointEl.value = SHEET_ENDPOINT;
+saveSheetEndpointBtn.addEventListener('click', ()=>{
+  saveStoredSheetEndpoint(sheetEndpointEl.value);
+  if(SHEET_ENDPOINT){
+    sheetEndpointStatus.textContent = 'Google Sheets endpoint saved. Future submissions will be sent there.';
+    sheetEndpointStatus.className = 'status-line ok';
+  }else{
+    sheetEndpointStatus.textContent = 'Google Sheets endpoint cleared. Submissions will stay local only.';
+    sheetEndpointStatus.className = 'status-line';
+  }
+});
 
 updateLogCount();
 </script>
